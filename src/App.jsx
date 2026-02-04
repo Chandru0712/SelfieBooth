@@ -29,6 +29,7 @@ function App() {
   const [timerDuration, setTimerDuration] = useState(3);
   const [showTimerMenu, setShowTimerMenu] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [showZoomMenu, setShowZoomMenu] = useState(false);
   const [selectedFrame, setSelectedFrame] = useState('none');
   const [frames, setFrames] = useState([{ id: 'none', name: 'Original', style: {}, image: null }]);
   const [capturedImage, setCapturedImage] = useState(null);
@@ -98,6 +99,8 @@ function App() {
 
   const handleScroll = () => {
     if (!scrollRef.current || isProgrammaticScroll.current) return;
+    
+    // Low latency scroll detection for "live" selection while dragging
     const container = scrollRef.current;
     const center = container.scrollLeft + container.offsetWidth / 2;
     
@@ -121,23 +124,49 @@ function App() {
     }
   };
 
-  // Auto-center the selected frame when it changes
+  const timerContainerRef = useRef(null);
+  const zoomContainerRef = useRef(null);
+
+  // Close menus on click outside
   useEffect(() => {
-    if (scrollRef.current && selectedFrame) {
-      const container = scrollRef.current;
-      const activeItem = container.querySelector('.frame-option-card.active');
-      if (activeItem && !isMouseDown) {
-        isProgrammaticScroll.current = true;
-        activeItem.scrollIntoView({ behavior: 'smooth', inline: 'center' });
-        
-        // Reset the programmatic flag after the smooth scroll finishes (~500ms)
-        if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
-        scrollTimeout.current = setTimeout(() => {
-          isProgrammaticScroll.current = false;
-        }, 500);
+    function handleClickOutside(event) {
+      if (timerContainerRef.current && !timerContainerRef.current.contains(event.target)) {
+        setShowTimerMenu(false);
+      }
+      if (zoomContainerRef.current && !zoomContainerRef.current.contains(event.target)) {
+        setShowZoomMenu(false);
       }
     }
-  }, [selectedFrame, category, isMouseDown]);
+    if (showTimerMenu || showZoomMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showTimerMenu, showZoomMenu]);
+
+  useEffect(() => {
+    if (scrollRef.current && selectedFrame && !isMouseDown) {
+      const container = scrollRef.current;
+      const activeItem = container.querySelector('.frame-option-card.active');
+      
+      if (activeItem) {
+        const containerCenter = container.scrollLeft + container.offsetWidth / 2;
+        const itemCenter = activeItem.offsetLeft + activeItem.offsetWidth / 2;
+        
+        // Only scroll if significantly off-center to maintain "organic" feel
+        if (Math.abs(containerCenter - itemCenter) > 5) {
+          isProgrammaticScroll.current = true;
+          activeItem.scrollIntoView({ behavior: 'smooth', inline: 'center' });
+          
+          if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+          scrollTimeout.current = setTimeout(() => {
+            isProgrammaticScroll.current = false;
+          }, 600);
+        }
+      }
+    }
+  }, [selectedFrame]);
 
   useEffect(() => {
     async function setupCamera() {
@@ -489,7 +518,7 @@ function App() {
 
             <div className="action-section">
               <div className="action-row">
-                <div className="timer-container">
+                <div className="timer-container" ref={timerContainerRef}>
                   {showTimerMenu && (
                     <div className="timer-dropdown glass-premium">
                       {[1, 3, 5, 10].map(time => (
@@ -522,16 +551,31 @@ function App() {
                   <div className="capture-inner-white"></div>
                 </button>
 
-                <button 
-                  className="zoom-toggle" 
-                  onClick={() => {
-                    const next = zoomLevel >= 3 ? 1 : zoomLevel + 0.5;
-                    setZoomLevel(next);
-                  }}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/><line x1="11" y1="8" x2="11" y2="14"/></svg>
-                  <span>{zoomLevel}x</span>
-                </button>
+                <div className="zoom-container" ref={zoomContainerRef}>
+                  {showZoomMenu && (
+                    <div className="timer-dropdown glass-premium">
+                      {[1, 1.5, 2, 2.5, 3].map(level => (
+                        <button 
+                          key={level} 
+                          className={`timer-option ${zoomLevel === level ? 'active' : ''}`}
+                          onClick={() => {
+                            setZoomLevel(level);
+                            setShowZoomMenu(false);
+                          }}
+                        >
+                          {level}x
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button 
+                    className={`zoom-toggle ${showZoomMenu ? 'menu-open' : ''}`} 
+                    onClick={() => setShowZoomMenu(!showZoomMenu)}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/><line x1="11" y1="8" x2="11" y2="14"/></svg>
+                    <span>{zoomLevel}x</span>
+                  </button>
+                </div>
               </div>
             </div>
             </aside>
