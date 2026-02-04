@@ -218,102 +218,120 @@ function App() {
   ];
 
   const captureImage = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    
-    // 1. Locate source and frame
-    const source = useIPCam ? document.querySelector('.viewfinder .camera-stream') : videoRef.current;
-    const currentFrame = frames.find(f => f.id === selectedFrame);
-    
-    if (!source) return;
+    try {
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        console.error("Canvas ref not found");
+        return;
+      }
+      const ctx = canvas.getContext('2d');
+      
+      // 1. Locate source and frame
+      // Fallback selector for the stream
+      const source = useIPCam 
+        ? (document.querySelector('.camera-stream') || document.querySelector('img[alt="IP Camera Stream"]'))
+        : videoRef.current;
+      
+      const currentFrame = frames.find(f => f.id === selectedFrame);
+      
+      if (!source) {
+        console.error("Camera source not found");
+        // Still show preview even if we couldn't capture, to avoid getting stuck
+        setShowPreview(true);
+        return;
+      }
 
-    // 2. Prepare frame image
-    const frameImg = new Image();
-    let frameWidth, frameHeight;
-    
-    if (currentFrame && currentFrame.image) {
-      frameImg.src = currentFrame.image;
-      await new Promise((resolve) => {
-        frameImg.onload = resolve;
-        frameImg.onerror = resolve;
-      });
-      frameWidth = frameImg.naturalWidth;
-      frameHeight = frameImg.naturalHeight;
-    } else {
-      frameWidth = source.naturalWidth || source.videoWidth;
-      frameHeight = source.naturalHeight || source.videoHeight;
-    }
+      // 2. Prepare frame image
+      const frameImg = new Image();
+      let frameWidth, frameHeight;
+      
+      if (currentFrame && currentFrame.image) {
+        frameImg.src = currentFrame.image;
+        await new Promise((resolve) => {
+          frameImg.onload = resolve;
+          frameImg.onerror = resolve;
+        });
+        frameWidth = frameImg.naturalWidth;
+        frameHeight = frameImg.naturalHeight;
+      } else {
+        frameWidth = source.naturalWidth || source.videoWidth || 1920;
+        frameHeight = source.naturalHeight || source.videoHeight || 1080;
+      }
 
-    // 3. Set canvas to match the FRAME size (Master Resolution)
-    canvas.width = frameWidth;
-    canvas.height = frameHeight;
+      // 3. Set canvas to match the FRAME size (Master Resolution)
+      canvas.width = frameWidth;
+      canvas.height = frameHeight;
 
-    // 4. Calculate "Cover" cropping for the camera source to fit the frame
-    const sourceWidth = source.naturalWidth || source.videoWidth;
-    const sourceHeight = source.naturalHeight || source.videoHeight;
-    
-    const targetRatio = frameWidth / frameHeight;
-    const sourceRatio = sourceWidth / sourceHeight;
-    
-    let drawWidth, drawHeight, offsetX, offsetY;
-    
-    if (sourceRatio > targetRatio) {
-      // Source is wider than frame (crop horizontal)
-      drawHeight = sourceHeight;
-      drawWidth = sourceHeight * targetRatio;
-      offsetX = (sourceWidth - drawWidth) / 2;
-      offsetY = 0;
-    } else {
-      // Source is taller than frame (crop vertical)
-      drawWidth = sourceWidth;
-      drawHeight = sourceWidth / targetRatio;
-      offsetX = 0;
-      offsetY = (sourceHeight - drawHeight) / 2;
-    }
+      // 4. Calculate "Cover" cropping for the camera source to fit the frame
+      const sourceWidth = source.naturalWidth || source.videoWidth || frameWidth;
+      const sourceHeight = source.naturalHeight || source.videoHeight || frameHeight;
+      
+      const targetRatio = frameWidth / frameHeight;
+      const sourceRatio = sourceWidth / sourceHeight;
+      
+      let drawWidth, drawHeight, offsetX, offsetY;
+      
+      if (sourceRatio > targetRatio) {
+        // Source is wider than frame (crop horizontal)
+        drawHeight = sourceHeight;
+        drawWidth = sourceHeight * targetRatio;
+        offsetX = (sourceWidth - drawWidth) / 2;
+        offsetY = 0;
+      } else {
+        // Source is taller than frame (crop vertical)
+        drawWidth = sourceWidth;
+        drawHeight = sourceWidth / targetRatio;
+        offsetX = 0;
+        offsetY = (sourceHeight - drawHeight) / 2;
+      }
 
-    // 5. Apply digital zoom if needed
-    const zoomScale = zoomLevel;
-    const zoomedWidth = drawWidth / zoomScale;
-    const zoomedHeight = drawHeight / zoomScale;
-    const zoomOffsetX = offsetX + (drawWidth - zoomedWidth) / 2;
-    const zoomOffsetY = offsetY + (drawHeight - zoomedHeight) / 2;
+      // 5. Apply digital zoom if needed
+      const zoomScale = zoomLevel || 1;
+      const zoomedWidth = drawWidth / zoomScale;
+      const zoomedHeight = drawHeight / zoomScale;
+      const zoomOffsetX = offsetX + (drawWidth - zoomedWidth) / 2;
+      const zoomOffsetY = offsetY + (drawHeight - zoomedHeight) / 2;
 
-    // 6. Draw background layer
-    ctx.filter = filters.find(f => f.id === filter)?.class || 'none';
-    if (!useIPCam) {
-      ctx.translate(frameWidth, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(source, zoomOffsetX, zoomOffsetY, zoomedWidth, zoomedHeight, 0, 0, frameWidth, frameHeight);
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-    } else {
-      ctx.drawImage(source, zoomOffsetX, zoomOffsetY, zoomedWidth, zoomedHeight, 0, 0, frameWidth, frameHeight);
-    }
+      // 6. Draw background layer
+      ctx.filter = filters.find(f => f.id === filter)?.class || 'none';
+      if (!useIPCam) {
+        ctx.translate(frameWidth, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(source, zoomOffsetX, zoomOffsetY, zoomedWidth, zoomedHeight, 0, 0, frameWidth, frameHeight);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+      } else {
+        ctx.drawImage(source, zoomOffsetX, zoomOffsetY, zoomedWidth, zoomedHeight, 0, 0, frameWidth, frameHeight);
+      }
 
-    // 7. Draw Frame layer on top
-    ctx.filter = 'none';
-    if (currentFrame && currentFrame.image) {
-      ctx.drawImage(frameImg, 0, 0, frameWidth, frameHeight);
-    }
+      // 7. Draw Frame layer on top
+      ctx.filter = 'none';
+      if (currentFrame && currentFrame.image) {
+        ctx.drawImage(frameImg, 0, 0, frameWidth, frameHeight);
+      }
 
-    // 8. Apply CSS border frames if any
-    if (currentFrame && currentFrame.style && Object.keys(currentFrame.style).length > 0) {
-      const { border, borderBottom } = currentFrame.style;
-      if (border) {
-        ctx.lineWidth = parseInt(border) * (frameWidth / 400); 
-        ctx.strokeStyle = border.split(' ')[2] || '#fff';
-        ctx.strokeRect(0, 0, frameWidth, frameHeight);
-        if (borderBottom) {
-          ctx.fillStyle = ctx.strokeStyle;
-          ctx.fillRect(0, frameHeight - parseInt(borderBottom) * (frameHeight / 600), frameWidth, frameHeight);
+      // 8. Apply CSS border frames if any
+      if (currentFrame && currentFrame.style && Object.keys(currentFrame.style).length > 0) {
+        const { border, borderBottom } = currentFrame.style;
+        if (border) {
+          ctx.lineWidth = parseInt(border) * (frameWidth / 400); 
+          ctx.strokeStyle = border.split(' ')[2] || '#fff';
+          ctx.strokeRect(0, 0, frameWidth, frameHeight);
+          if (borderBottom) {
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.fillRect(0, frameHeight - parseInt(borderBottom) * (frameHeight / 600), frameWidth, frameHeight);
+          }
         }
       }
-    }
 
-    // 9. Finalize
-    const dataUrl = canvas.toDataURL('image/png');
-    setCapturedImage(dataUrl);
-    setShowPreview(true);
+      // 9. Finalize
+      const dataUrl = canvas.toDataURL('image/png');
+      setCapturedImage(dataUrl);
+    } catch (error) {
+      console.error("Error in captureImage:", error);
+    } finally {
+      // Always show the preview screen after attempted capture
+      setShowPreview(true);
+    }
   };
 
   const takePhoto = () => {
@@ -353,6 +371,43 @@ function App() {
               <div className="start-prompt">
                 <span className="finger-icon">👆</span>
                 <span className="mouse-icon-idle">🖱️</span>
+              </div>
+            </div>
+          </div>
+        ) : showPreview ? (
+          <div className="captured-screen-container">
+            <div className="preview-container glass-premium">
+              <div className="preview-header">
+                <h2 className="gradient-text">Nice Shot!</h2>
+                <p>Your selfie is ready</p>
+              </div>
+              
+              <div className="preview-image-wrapper">
+                <img src={capturedImage} alt="Captured Selfie" className="preview-img" />
+              </div>
+
+              <div className="preview-footer">
+                <button 
+                  className="retake-btn glass-premium"
+                  onClick={() => setShowPreview(false)}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 2v6h6M21.5 22v-6h-6"/><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.3"/></svg>
+                  <span>Retake</span>
+                </button>
+
+                <button 
+                  className="save-btn-premium"
+                  onClick={() => {
+                    if (!capturedImage) return;
+                    const link = document.createElement('a');
+                    link.href = capturedImage;
+                    link.download = `selfie-${Date.now()}.png`;
+                    link.click();
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>Save to Gallery</span>
+                </button>
               </div>
             </div>
           </div>
@@ -405,221 +460,178 @@ function App() {
             <button className="home-btn-premium" onClick={() => { setCategory(null); setIsActive(false); }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             </button>
-        {/* <header className="header">
-          <div className="logo">
-            <span className="dot"></span>
-            <h1 className="gradient-text">SelfieBooth Pro</h1>
-          </div>
-          <p className="subtitle">Capture your best moments with studio-quality filters.</p>
-        </header> */}
 
-        <div className="booth-container">
-          <div className="viewfinder-wrapper glass">
-            <div className="viewfinder">
-              {/* Camera Feed stays at the bottom */}
-              {useIPCam ? (
-                <img 
-                  src="/cam-proxy/video" 
-                  className="camera-stream"
-                  alt="IP Camera Stream"
-                  style={{ 
-                    filter: filters.find(f => f.id === filter).class,
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    transform: `scale(${zoomLevel})`,
-                    willChange: 'transform, filter' // Hardware acceleration
-                  }}
-                />
-              ) : (
-                <video 
-                  ref={videoRef}
-                  className="camera-stream"
-                  autoPlay 
-                  playsInline 
-                  muted
-                  style={{ 
-                    filter: filters.find(f => f.id === filter).class,
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    transform: `scaleX(-1) scale(${zoomLevel})`,
-                    willChange: 'transform, filter' // Hardware acceleration
-                  }}
-                />
-              )}
+            <div className="booth-container">
+              <div className="viewfinder-wrapper glass">
+                <div className="viewfinder">
+                  {/* Camera Feed stays at the bottom */}
+                  {useIPCam ? (
+                    <img 
+                      src="/cam-proxy/video" 
+                      className="camera-stream"
+                      alt="IP Camera Stream"
+                      style={{ 
+                        filter: filters.find(f => f.id === filter).class,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        transform: `scale(${zoomLevel})`,
+                        willChange: 'transform, filter' // Hardware acceleration
+                      }}
+                    />
+                  ) : (
+                    <video 
+                      ref={videoRef}
+                      className="camera-stream"
+                      autoPlay 
+                      playsInline 
+                      muted
+                      style={{ 
+                        filter: filters.find(f => f.id === filter).class,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        transform: `scaleX(-1) scale(${zoomLevel})`,
+                        willChange: 'transform, filter' // Hardware acceleration
+                      }}
+                    />
+                  )}
 
-              {/* Frames sit perfectly on top */}
-              {frames.find(f => f.id === selectedFrame)?.image && (
-                <img 
-                  src={frames.find(f => f.id === selectedFrame).image} 
-                  className="frame-image-overlay"
-                  alt="Frame"
-                />
-              )}
-              <div 
-                className="frame-overlay" 
-                style={frames.find(f => f.id === selectedFrame)?.style}
-              ></div>
-              
-              {!stream && !useIPCam && (
-                <div className="camera-placeholder">
-                  <div className="lens"></div>
-                  <p>Requesting Camera Access...</p>
-                </div>
-              )}
-
-              {countdown !== null && (
-                <div className="countdown-overlay">
-                  <span className="countdown-number">{countdown}</span>
-                </div>
-              )}
-
-              <div className="camera-status">
-                <span className="status-dot"></span>
-                {useIPCam ? 'IP-LINK' : 'LIVE'}
-              </div>
-            </div>
-            {/* Hidden canvas for processing */}
-            <canvas ref={canvasRef} style={{ display: 'none' }} />
-          </div>
-
-          <aside className="controls-panel">
-            <div className="frame-selector-container">
-                <div 
-                  className={`frame-selector-scroll ${isMouseDown ? 'grabbing' : ''}`} 
-                  ref={scrollRef}
-                  onScroll={handleScroll}
-                  onMouseDown={handleMouseDown}
-                  onMouseLeave={handleMouseLeave}
-                  onMouseUp={handleMouseUp}
-                  onMouseMove={handleMouseMove}
-                  onContextMenu={(e) => e.preventDefault()} // Disable right-click menu
-                >
-                {/* Spacer for center alignment */}
-                <div className="scroll-spacer"></div>
-                {frames.map(f => (
+                  {/* Frames sit perfectly on top */}
+                  {frames.find(f => f.id === selectedFrame)?.image && (
+                    <img 
+                      src={frames.find(f => f.id === selectedFrame).image} 
+                      className="frame-image-overlay"
+                      alt="Frame"
+                    />
+                  )}
                   <div 
-                    key={f.id}
-                    className={`frame-option-card ${selectedFrame === f.id ? 'active' : ''}`}
-                    onClick={() => {
-                      setSelectedFrame(f.id);
-                    }}
-                  >
-                    <div className="frame-preview-mini" style={f.style}>
-                      {f.image && <img src={f.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'fill' }} />}
+                    className="frame-overlay" 
+                    style={frames.find(f => f.id === selectedFrame)?.style}
+                  ></div>
+                  
+                  {!stream && !useIPCam && (
+                    <div className="camera-placeholder">
+                      <div className="lens"></div>
+                      <p>Requesting Camera Access...</p>
                     </div>
-                    <span>{f.name}</span>
+                  )}
+
+                  {countdown !== null && (
+                    <div className="countdown-overlay">
+                      <span className="countdown-number">{countdown}</span>
+                    </div>
+                  )}
+
+                  <div className="camera-status">
+                    <span className="status-dot"></span>
+                    {useIPCam ? 'IP-LINK' : 'LIVE'}
                   </div>
-                ))}
-                <div className="scroll-spacer"></div>
+                </div>
+                {/* Hidden canvas for processing */}
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
               </div>
-            </div>
 
-            <div className="action-section">
-              <div className="action-row">
-                <div className="timer-container" ref={timerContainerRef}>
-                  {showTimerMenu && (
-                    <div className="timer-dropdown glass-premium">
-                      {[1, 3, 5, 10].map(time => (
-                        <button 
-                          key={time} 
-                          className={`timer-option ${timerDuration === time ? 'active' : ''}`}
-                          onClick={() => {
-                            setTimerDuration(time);
-                            setShowTimerMenu(false);
-                          }}
-                        >
-                          {time}s
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <button 
-                    className={`timer-toggle ${showTimerMenu ? 'menu-open' : ''}`} 
-                    onClick={() => setShowTimerMenu(!showTimerMenu)}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    <span>{timerDuration}s</span>
-                  </button>
+              <aside className="controls-panel">
+                <div className="frame-selector-container">
+                    <div 
+                      className={`frame-selector-scroll ${isMouseDown ? 'grabbing' : ''}`} 
+                      ref={scrollRef}
+                      onScroll={handleScroll}
+                      onMouseDown={handleMouseDown}
+                      onMouseLeave={handleMouseLeave}
+                      onMouseUp={handleMouseUp}
+                      onMouseMove={handleMouseMove}
+                      onContextMenu={(e) => e.preventDefault()} // Disable right-click menu
+                    >
+                    <div className="scroll-spacer"></div>
+                    {frames.map(f => (
+                      <div 
+                        key={f.id}
+                        className={`frame-option-card ${selectedFrame === f.id ? 'active' : ''}`}
+                        onClick={() => {
+                          setSelectedFrame(f.id);
+                        }}
+                      >
+                        <div className="frame-preview-mini" style={f.style}>
+                          {f.image && <img src={f.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'fill' }} />}
+                        </div>
+                        <span>{f.name}</span>
+                      </div>
+                    ))}
+                    <div className="scroll-spacer"></div>
+                  </div>
                 </div>
 
-                <button 
-                  className="capture-btn-premium"
-                  onClick={takePhoto}
-                >
-                  <div className="capture-inner-white"></div>
-                </button>
-
-                <div className="zoom-container" ref={zoomContainerRef}>
-                  {showZoomMenu && (
-                    <div className="timer-dropdown glass-premium">
-                      {[1, 1.5, 2, 2.5, 3].map(level => (
-                        <button 
-                          key={level} 
-                          className={`timer-option ${zoomLevel === level ? 'active' : ''}`}
-                          onClick={() => {
-                            setZoomLevel(level);
-                            setShowZoomMenu(false);
-                          }}
-                        >
-                          {level}x
-                        </button>
-                      ))}
+                <div className="action-section">
+                  <div className="action-row">
+                    <div className="timer-container" ref={timerContainerRef}>
+                      {showTimerMenu && (
+                        <div className="timer-dropdown glass-premium">
+                          {[1, 3, 5, 10].map(time => (
+                            <button 
+                              key={time} 
+                              className={`timer-option ${timerDuration === time ? 'active' : ''}`}
+                              onClick={() => {
+                                setTimerDuration(time);
+                                setShowTimerMenu(false);
+                              }}
+                            >
+                              {time}s
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button 
+                        className={`timer-toggle ${showTimerMenu ? 'menu-open' : ''}`} 
+                        onClick={() => setShowTimerMenu(!showTimerMenu)}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span>{timerDuration}s</span>
+                      </button>
                     </div>
-                  )}
-                  <button 
-                    className={`zoom-toggle ${showZoomMenu ? 'menu-open' : ''}`} 
-                    onClick={() => setShowZoomMenu(!showZoomMenu)}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/><line x1="11" y1="8" x2="11" y2="14"/></svg>
-                    <span>{zoomLevel}x</span>
-                  </button>
+
+                    <button 
+                      className="capture-btn-premium"
+                      onClick={takePhoto}
+                    >
+                      <div className="capture-inner-white"></div>
+                    </button>
+
+                    <div className="zoom-container" ref={zoomContainerRef}>
+                      {showZoomMenu && (
+                        <div className="timer-dropdown glass-premium">
+                          {[1, 1.5, 2, 2.5, 3].map(level => (
+                            <button 
+                              key={level} 
+                              className={`timer-option ${zoomLevel === level ? 'active' : ''}`}
+                              onClick={() => {
+                                setZoomLevel(level);
+                                setShowZoomMenu(false);
+                              }}
+                            >
+                              {level}x
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button 
+                        className={`zoom-toggle ${showZoomMenu ? 'menu-open' : ''}`} 
+                        onClick={() => setShowZoomMenu(!showZoomMenu)}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/><line x1="11" y1="8" x2="11" y2="14"/></svg>
+                        <span>{zoomLevel}x</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </aside>
             </div>
-            </aside>
-        </div>
           </>
         )}
       </main>
 
-      {showPreview && (
-        <div className="preview-screen-overlay">
-          <div className="preview-container glass-premium">
-            <div className="preview-header">
-              <h2 className="gradient-text">Preview Your Selfie</h2>
-            </div>
-            
-            <div className="preview-image-wrapper">
-              <img src={capturedImage} alt="Captured Selfie" className="preview-img" />
-            </div>
 
-            <div className="preview-footer">
-              <button 
-                className="retake-btn glass-premium"
-                onClick={() => setShowPreview(false)}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 2v6h6M21.5 22v-6h-6"/><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.3"/></svg>
-                <span>Retake</span>
-              </button>
-
-              <button 
-                className="save-btn-premium"
-                onClick={() => {
-                  const link = document.createElement('a');
-                  link.href = capturedImage;
-                  link.download = `selfie-${Date.now()}.png`;
-                  link.click();
-                }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                <span>Save to Gallery</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
