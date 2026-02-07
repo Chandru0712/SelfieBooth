@@ -1,5 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
 
+html {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 :root {
   font-family: 'Outfit', 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -24,16 +32,25 @@
 
 body {
   margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   place-items: center;
-  min-width: 320px;
+  min-width: 100vw;
   min-height: 100vh;
-  background: radial-gradient(circle at 50% 50%, #111111 0%, #050505 100%);
-  overflow-x: hidden;
+  background: linear-gradient(135deg, #000 0%, #0a0a0a 100%);
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
 }
 
 #root {
-  width: 100%;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 * {
