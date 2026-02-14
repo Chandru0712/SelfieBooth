@@ -5,7 +5,7 @@
 
 export const APP_CONFIG = {
   // UI/UX Configuration
-  ZOOM_LEVELS: [1, 1.5, 2, 2.5, 3],
+  ZOOM_LEVELS: [0.5, 1, 1.5, 2, 2.5, 3],
   TIMER_OPTIONS: [1, 3, 5, 10],
 
   // Frame Configuration
@@ -40,7 +40,7 @@ export const CAMERA_CONFIG = {
   SCROLL_SPEED_MULTIPLIER: 2, // Right-click drag speed multiplier
 
   // IP Camera proxy (update with your IP)
-  USE_IP_CAMERA: true, // Set to true to use IP camera
+  USE_IP_CAMERA: false, // Set to true to use IP camera
   IP_CAMERA_URL: '/cam-proxy/video', // Proxy endpoint for IP Webcam
   IP_CAMERA_SNAPSHOT: '/cam-proxy/shot.jpg', // Snapshot endpoint for capturing frames
 };

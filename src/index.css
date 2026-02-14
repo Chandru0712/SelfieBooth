@@ -22,12 +22,48 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
+  /* --- Color Palette --- */
+
+  /* Brand Colors */
   --primary: #6366f1;
+  /* Indigo 500 */
   --primary-glow: rgba(99, 102, 241, 0.5);
+  --secondary: #8b5cf6;
+  /* Violet 500 */
   --accent: #f43f5e;
-  --surface: #111111;
-  --surface-light: #1e1e1e;
+  /* Rose 500 */
+
+  /* Backgrounds */
+  --background: #0f172a;
+  /* Slate 900 */
+  --surface: #1e293b;
+  /* Slate 800 */
+  --surface-light: #334155;
+  /* Slate 700 */
+  --overlay: rgba(15, 23, 42, 0.8);
+
+  /* Text Colors */
+  --text-primary: #f8fafc;
+  /* Slate 50 */
+  --text-secondary: #cbd5e1;
+  /* Slate 300 */
   --text-muted: #94a3b8;
+  /* Slate 400 */
+
+  /* Status Colors */
+  --success: #10b981;
+  /* Emerald 500 */
+  --warning: #f59e0b;
+  /* Amber 500 */
+  --error: #ef4444;
+  /* Red 500 */
+
+  /* UI Elements */
+  --border: #334155;
+  /* Slate 700 */
+  --radius: 12px;
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body {

@@ -61,7 +61,7 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState('children');
   
   // Frame state
-  const [frames, setFrames] = useState([{ id: 'none', name: 'Original', image: null }]);
+  const [frames, setFrames] = useState([]);
   const [selectedFrame, setSelectedFrame] = useState('none');
   
   // Photo state
@@ -95,12 +95,11 @@ function App() {
     }
 
     const allFrames = [
-      { id: 'none', name: 'Original', image: null },
       ...categoryFrames,
     ];
 
     setFrames(allFrames);
-    setSelectedFrame(allFrames[1]?.id || 'none');
+    setSelectedFrame(allFrames[0]?.id || 'none');
   }, [selectedCategory]);
 
   /**
@@ -135,8 +134,8 @@ function App() {
         sessionId = newSession.id;
       }
 
-      // Save photo to session
-      await session.savePhoto(imageData.blob, imageData.metadata);
+      // Skip auto-save, just show preview
+      // await session.savePhoto(imageData.blob, imageData.metadata);
 
       // Store for preview
       setCapturedImageData(imageData);

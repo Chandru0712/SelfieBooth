@@ -29,12 +29,12 @@ class CameraService {
           return { success: true, stream: this.mediaStream, isIPCamera: this.isIPCamera };
         }
       }
-      
+
       this.isInitializing = true;
-      
+
       // Stop any existing stream first to prevent "camera in use" errors
       this.stop();
-      
+
       this.videoElement = videoElement;
 
       // Check if IP camera is enabled
@@ -46,13 +46,13 @@ class CameraService {
 
       // Use device camera (original code)
       const result = await this.initializeDeviceCamera(constraints, videoElement);
-      
+
       // If overconstrained, retry with basic settings
       if (!result.success && result.errorType === 'OVERCONSTRAINED') {
         console.log('Retrying with basic camera settings...');
         return await this.initializeDeviceCamera({ video: true }, videoElement);
       }
-      
+
       return result;
     } catch (error) {
       console.error('Camera initialization failed:', error);
@@ -72,10 +72,10 @@ class CameraService {
    */
   async initializeIPCamera() {
     this.isIPCamera = true;
-    
+
     const endpoint = CAMERA_CONFIG.IP_CAMERA_URL || '/cam-proxy/video';
     console.log(`Using IP camera endpoint: ${endpoint}`);
-    
+
     // IP camera doesn't use mediaStream - it uses img tag in the UI
     // Just return success and let the component render the img tag
     return {
@@ -112,34 +112,64 @@ class CameraService {
       console.log('✓ Camera stream obtained');
 
       if (videoElement) {
+        console.log('Setting up video element with mediaStream...');
         videoElement.srcObject = this.mediaStream;
-        
+
         // Wait for video to be ready to play
         await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            reject(new Error('Video element failed to load stream'));
-          }, 5000);
-          
-          videoElement.onloadedmetadata = () => {
-            clearTimeout(timeout);
-            console.log('✓ Video metadata loaded');
+          let timeout;
+          let metadataHandler;
+          let errorHandler;
+
+          const cleanup = () => {
+            if (timeout) clearTimeout(timeout);
+            if (metadataHandler) videoElement.removeEventListener('loadedmetadata', metadataHandler);
+            if (errorHandler) videoElement.removeEventListener('error', errorHandler);
+          };
+
+          timeout = setTimeout(() => {
+            cleanup();
+            reject(new Error('Video element failed to load stream (timeout after 8s)'));
+          }, 8000);
+
+          metadataHandler = () => {
+            console.log('✓ Video metadata loaded, videoWidth:', videoElement.videoWidth, 'videoHeight:', videoElement.videoHeight);
+            cleanup();
             resolve();
           };
-          
-          videoElement.onerror = () => {
-            clearTimeout(timeout);
+
+          errorHandler = (err) => {
+            console.error('Video element error:', err);
+            cleanup();
             reject(new Error('Could not start video source'));
           };
+
+          // Use addEventListener for better reliability
+          videoElement.addEventListener('loadedmetadata', metadataHandler, { once: true });
+          videoElement.addEventListener('error', errorHandler, { once: true });
+
+          // If loadedmetadata already fired before we attached listener, resolve
+          if (videoElement.readyState >= 1) {
+            console.log('✓ Video already has metadata (readyState: ' + videoElement.readyState + ')');
+            cleanup();
+            resolve();
+          }
         });
-        
+
         // Ensure video plays
         try {
-          await videoElement.play();
-          console.log('✓ Video playing');
+          // Force play attribute is already set, but try play() for extra assurance
+          const playPromise = videoElement.play();
+          if (playPromise) {
+            await playPromise;
+            console.log('✓ Video playing');
+          }
         } catch (playError) {
+          // Autoplay might be restricted, but this is OK if the video stream is loaded
           console.warn('Video play warning:', playError.message);
-          // Continue anyway - autoplay should handle it
         }
+      } else {
+        console.warn('No video element provided, stream initialized without video element');
       }
 
       this.stream = this.mediaStream;
@@ -268,17 +298,17 @@ class CameraService {
       };
 
       let source = sourceElement;
-      
+
       // For IP camera, always fetch from snapshot endpoint or img element
       if (this.isIPCamera) {
         const snapshotUrl = CAMERA_CONFIG.IP_CAMERA_SNAPSHOT;
         if (snapshotUrl) {
           console.log('Using snapshot endpoint:', snapshotUrl);
-          
+
           // Create a temporary img to load the snapshot
           const snapshotImg = new Image();
           snapshotImg.crossOrigin = 'anonymous';
-          
+
           return new Promise((resolve, reject) => {
             snapshotImg.onload = async () => {
               try {
@@ -286,10 +316,25 @@ class CameraService {
                 canvas.width = targetWidth;
                 canvas.height = targetHeight;
                 const ctx = canvas.getContext('2d');
-                
-                // Draw snapshot
-                ctx.drawImage(snapshotImg, 0, 0, canvas.width, canvas.height);
-                
+
+                // Calculate crop to cover
+                const sRect = getCoverRect(
+                  snapshotImg.naturalWidth,
+                  snapshotImg.naturalHeight,
+                  targetWidth,
+                  targetHeight
+                );
+
+                if (sRect) {
+                  ctx.drawImage(
+                    snapshotImg,
+                    sRect.sx, sRect.sy, sRect.sWidth, sRect.sHeight,
+                    0, 0, canvas.width, canvas.height
+                  );
+                } else {
+                  ctx.drawImage(snapshotImg, 0, 0, canvas.width, canvas.height);
+                }
+
                 // Convert to blob
                 canvas.toBlob(
                   (blob) => {
@@ -310,26 +355,26 @@ class CameraService {
                 reject(err);
               }
             };
-            
+
             snapshotImg.onerror = () => {
               console.error('Failed to load snapshot from IP camera at:', snapshotUrl);
               reject(new Error('Failed to load snapshot from IP camera. Make sure the endpoint ' + snapshotUrl + ' is available.'));
             };
-            
+
             // Add timestamp to prevent caching
             snapshotImg.src = snapshotUrl + '?t=' + Date.now();
           });
         } else {
           // No snapshot URL, try to use img element
-          source = document.querySelector('.camera-stream') || 
-                   document.querySelector('img[alt="IP Camera Stream"]');
-          
+          source = document.querySelector('.camera-stream') ||
+            document.querySelector('img[alt="IP Camera Stream"]');
+
           if (!source) {
             throw new Error('IP camera image element not found and no snapshot URL configured');
           }
         }
       }
-      
+
       // For webcam, use the provided video element
       if (!this.isIPCamera && !source) {
         throw new Error('Camera source element not provided');
@@ -341,15 +386,55 @@ class CameraService {
 
       const ctx = canvas.getContext('2d');
 
-      // Mirror ONLY for webcam (not IP camera)
-      if (!this.isIPCamera && source && source.tagName === 'VIDEO') {
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-      }
-
-      // Draw frame from source
+      // Draw frame from source with proper crop-to-cover
       try {
-        ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+        if (!this.isIPCamera && source && source.tagName === 'VIDEO') {
+          // For video: calculate proper crop to match preview display
+          const srcWidth = source.videoWidth;
+          const srcHeight = source.videoHeight;
+          const dstWidth = canvas.width;
+          const dstHeight = canvas.height;
+
+          // Calculate crop rectangle for object-fit: cover behavior
+          const srcRatio = srcWidth / srcHeight;
+          const dstRatio = dstWidth / dstHeight;
+
+          let cropX = 0, cropY = 0, cropWidth = srcWidth, cropHeight = srcHeight;
+
+          if (srcRatio > dstRatio) {
+            // Source is wider than target: scale by height, crop width from center
+            cropWidth = srcHeight * dstRatio;
+            cropX = (srcWidth - cropWidth) / 2;
+          } else {
+            // Source is taller than target: scale by width, crop height from center
+            cropHeight = srcWidth / dstRatio;
+            cropY = (srcHeight - cropHeight) / 2;
+          }
+
+          // Mirror and draw with proper crop
+          ctx.save();
+          ctx.translate(dstWidth, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(source, cropX, cropY, cropWidth, cropHeight, 0, 0, dstWidth, dstHeight);
+          ctx.restore();
+        } else {
+          // For IP camera or other images: draw with crop
+          const srcSize = getSourceSize(source); // Helper defined above
+          const sRect = getCoverRect(
+            srcSize.width, srcSize.height,
+            canvas.width, canvas.height
+          );
+
+          if (sRect) {
+            ctx.drawImage(
+              source,
+              sRect.sx, sRect.sy, sRect.sWidth, sRect.sHeight,
+              0, 0, canvas.width, canvas.height
+            );
+          } else {
+            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+          }
+        }
         console.log('✓ Image drawn to canvas successfully');
       } catch (drawError) {
         console.error('Canvas draw error:', drawError);
@@ -393,7 +478,7 @@ class CameraService {
           console.log('Stopped track:', track.kind, track.label);
         });
       }
-      
+
       // Clear video element
       if (this.videoElement) {
         if (this.isIPCamera) {
@@ -407,13 +492,13 @@ class CameraService {
         this.videoElement.onloadedmetadata = null;
         this.videoElement.onerror = null;
       }
-      
+
       // Clear all references
       this.stream = null;
       this.mediaStream = null;
       this.isIPCamera = false;
       this.isInitializing = false;
-      
+
       console.log('Camera service stopped and cleaned up');
     } catch (error) {
       console.error('Error during camera cleanup:', error);

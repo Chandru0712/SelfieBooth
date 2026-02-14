@@ -29,7 +29,7 @@ export const PreviewScreen = ({
       const url = URL.createObjectURL(imageData.blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `selfie-${Date.now()}.png`;
+      link.download = imageData.metadata?.fileName || `selfie-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -150,26 +150,7 @@ export const PreviewScreen = ({
           )}
         </div>
 
-        {/* Zoom controls */}
-        <div className="preview-zoom-controls">
-          <button
-            className="btn btn-sm"
-            onClick={() => setZoomLevel(Math.max(1, zoomLevel - 0.1))}
-            disabled={zoomLevel <= 1}
-            aria-label="Zoom out"
-          >
-            −
-          </button>
-          <span className="zoom-level">{(zoomLevel * 100).toFixed(0)}%</span>
-          <button
-            className="btn btn-sm"
-            onClick={() => setZoomLevel(Math.min(3, zoomLevel + 0.1))}
-            disabled={zoomLevel >= 3}
-            aria-label="Zoom in"
-          >
-            +
-          </button>
-        </div>
+
       </div>
 
       {/* Action buttons */}

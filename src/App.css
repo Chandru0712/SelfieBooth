@@ -1,13 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
 
-:root {
-    --primary: #6366f1;
-    --primary-glow: rgba(99, 102, 241, 0.5);
-    --accent: #f43f5e;
-    --surface: #111111;
-    --text-primary: #ffffff;
-    --text-muted: rgba(255, 255, 255, 0.6);
-}
+
 
 .app-container {
     height: 100vh;

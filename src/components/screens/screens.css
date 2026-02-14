@@ -1,27 +1,16 @@
-/**
- * Screens Styling - Main screen components
- * Phase 1 MVP: Responsive, accessible styling
- */
-
 @import url('https://fonts.googleapis.com/css2?family=Righteous&display=swap');
 
-:root {
-  --primary: #6366f1;
-  --accent: #f43f5e;
-  --secondary: #8b5cf6;
-  --background: #0f172a;
-  --surface: #1e293b;
-  --surface-light: #334155;
-  --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --border: #475569;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --error: #ef4444;
-
-  --radius: 12px;
-  --shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+/* Main App Container */
+.app {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 /* ==================== WELCOME SCREEN ==================== */
@@ -30,8 +19,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-  width: 100vw;
+  height: 100%;
+  width: 100%;
   padding: 0;
   margin: 0;
   position: absolute;
@@ -211,22 +200,26 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  height: 100%;
+  width: 100%;
   background-image: url('../../assets/Tiger.jpg');
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border);
   border-radius: 50px;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  padding: 20px;
+  padding: 40px;
+  gap: 40px;
   position: relative;
+  box-sizing: border-box;
 }
 
 .selection-screen::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  /* background: var(--overlay); */
+  backdrop-filter: blur(1.5px);
   z-index: 0;
 }
 
@@ -291,10 +284,10 @@
   justify-content: center;
   gap: 15px;
   padding: 30px;
-  background: rgba(255, 255, 255, 0.15);
-  border: 3px solid rgba(255, 255, 255, 0.4);
+  background: var(--surface-light);
+  border: 3px solid var(--surface-light);
   border-radius: 20px;
-  color: #1a1a1a;
+  color: var(--text-primary);
   cursor: pointer;
   transition: var(--transition);
   font-size: 16px;
@@ -312,10 +305,10 @@
 }
 
 .category-card.selected {
-  border-color: rgba(255, 255, 255, 0.9);
+  border-color: var(--text-primary);
   border-width: 4px;
-  background: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 0 30px rgba(99, 102, 241, 0.7);
+  background: var(--primary-glow);
+  box-shadow: 0 0 30px var(--primary);
   backdrop-filter: blur(25px);
 }
 
@@ -384,8 +377,6 @@
   justify-content: space-between;
   z-index: 10;
   padding: 10px;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent);
-  border-radius: 20px 20px 0 0;
 }
 
 .capture-title {
@@ -525,8 +516,8 @@
   letter-spacing: 0.5px;
 }
 
-/* Preview Overlay */
-.preview-overlay {
+/* Capture Preview Overlay */
+.capture-preview-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -540,7 +531,7 @@
   z-index: 1000;
 }
 
-.preview-image-container {
+.capture-preview-image-container {
   flex: 1;
   display: flex;
   align-items: center;
@@ -550,14 +541,14 @@
   overflow: hidden;
 }
 
-.preview-image {
+.capture-preview-image {
   width: 100%;
   height: 100%;
   object-fit: contain;
   border-radius: 0;
 }
 
-.preview-actions {
+.capture-preview-actions {
   display: flex;
   gap: 20px;
   padding: 30px;
@@ -566,7 +557,7 @@
   justify-content: center;
 }
 
-.btn-preview {
+.capture-btn-preview {
   flex: 1;
   display: flex;
   align-items: center;
@@ -582,25 +573,31 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-.btn-retake {
+.capture-btn-preview:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.capture-btn-retake {
   background: rgba(255, 255, 255, 0.1);
   color: white;
   border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
-.btn-retake:hover {
+.capture-btn-retake:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
-.btn-confirm {
+.capture-btn-confirm {
   background: linear-gradient(135deg, #10b981, #059669);
   color: white;
 }
 
-.btn-confirm:hover {
+.capture-btn-confirm:hover:not(:disabled) {
   background: linear-gradient(135deg, #059669, #047857);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
@@ -677,7 +674,7 @@
   justify-content: center;
   gap: 40px;
   width: 100%;
-  padding: 20px;
+  padding: 40px 20px;
   margin-top: 15px;
   position: relative;
 }
@@ -893,15 +890,15 @@
 
 .frame-selector-section {
   position: absolute;
-  bottom: 100px;
+  bottom: 150px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   gap: 8px;
   align-items: center;
-  width: 90%;
-  max-width: 600px;
+  width: 100%;
+  max-width: 900px;
   padding: 15px 20px;
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1069,33 +1066,45 @@
 .preview-image-container {
   position: relative;
   width: 100%;
-  max-width: 400px;
-  aspect-ratio: 9 / 16;
-  background: var(--surface);
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: var(--shadow);
+  height: 100%;
+  flex: 1;
+  /* background: var(--surface); Remove background to fit image only */
+  /* border-radius: var(--radius); Moved to image */
+  /* overflow: hidden;  Moved to image wrapper if needed */
+  /* box-shadow: var(--shadow); Moved to image */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .preview-image-wrapper {
   width: 100%;
   height: 100%;
   transition: transform 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .preview-image {
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
+/* Removed .preview-loading styles as they are replaced */
 .preview-loading {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay);
+  z-index: 10;
 }
 
 .preview-zoom-controls {
@@ -1309,7 +1318,8 @@
   }
 
   .preview-image-container {
-    max-width: 300px;
+    max-width: 100%;
+    height: 100%;
   }
 
   .btn-lg {

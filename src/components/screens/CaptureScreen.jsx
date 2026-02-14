@@ -9,6 +9,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useCamera } from '../../hooks/useCamera';
 import { cameraService } from '../../services/cameraService';
 import { APP_CONFIG } from '../../constants';
+import { v4 as uuidv4 } from 'uuid';
+import imageCompression from 'browser-image-compression';
 import '../screens/screens.css';
 
 const ZOOM_OPTIONS = [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3];
@@ -61,35 +63,30 @@ export const CaptureScreen = ({
   const previewContainerRef = useRef(null);
 
   const getCaptureDimensions = () => {
-    if (selectedFrame !== 'none' && framePixelSize?.width && framePixelSize?.height) {
-      return framePixelSize;
-    }
-
-    if (cameraService.isIPCamera) {
-      const img = document.querySelector('.camera-stream');
-      const width = img?.naturalWidth || img?.width;
-      const height = img?.naturalHeight || img?.height;
-      if (width && height) {
-        return { width, height };
-      }
-    }
-
-    const video = videoRef.current;
-    const width = video?.videoWidth;
-    const height = video?.videoHeight;
-    if (width && height) {
-      return { width, height };
-    }
-
+    // Get exact visual dimensions from preview container
     const container = previewContainerRef.current;
-    if (container) {
-      const rect = container.getBoundingClientRect();
-      if (rect.width && rect.height) {
-        return { width: Math.round(rect.width), height: Math.round(rect.height) };
-      }
+    if (!container) return null;
+    
+    const rect = container.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    
+    // Use container's exact pixel dimensions
+    const containerWidth = Math.round(rect.width);
+    const containerHeight = Math.round(rect.height);
+    
+    // Get actual video dimensions
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      // Fallback if video not ready
+      return { width: containerWidth, height: containerHeight };
     }
 
-    return null;
+    // Return exact container dimensions (what you see on screen)
+    // This ensures captured image matches preview exactly
+    return { 
+      width: containerWidth, 
+      height: containerHeight 
+    };
   };
 
   /**
@@ -111,6 +108,10 @@ export const CaptureScreen = ({
    * Handle capture button click
    * Starts timer countdown then captures image
    */
+  const [isCompressing, setIsCompressing] = useState(false);
+
+  // ... (existing hooks)
+
   const handleCaptureClick = async () => {
     if (isCapturing || !isInitialized) return;
 
@@ -134,84 +135,191 @@ export const CaptureScreen = ({
       try {
         setShowCountdown(false);
         
-        // Show flash immediately for instant feedback
+        // Show flash immediately
         setShowFlash(true);
         setTimeout(() => {
           setShowFlash(false);
-          setIsProcessing(true);  // Show processing screen
         }, 600);
 
         const dimensions = getCaptureDimensions();
-        if (!dimensions) {
-          throw new Error('Unable to determine capture size');
+        if (!dimensions) throw new Error('Unable to determine capture size');
+
+        // Create canvas for final composition
+        const canvas = document.createElement('canvas');
+        canvas.width = dimensions.width;
+        canvas.height = dimensions.height;
+        const ctx = canvas.getContext('2d');
+
+        // 1. Draw Video Layer (Optimized)
+        if (cameraService.isIPCamera) {
+           // Fallback to service for IP camera
+           const captureResult = await captureFrame(dimensions.width, dimensions.height);
+           const img = new Image();
+           await new Promise((resolve) => {
+             img.onload = resolve;
+             img.src = URL.createObjectURL(captureResult.blob);
+           });
+           
+           // Calculate crop for object-fit: cover
+           const iWidth = img.width;
+           const iHeight = img.height;
+           const cWidth = canvas.width;
+           const cHeight = canvas.height;
+           
+           const r_i = iWidth / iHeight;
+           const r_c = cWidth / cHeight;
+           
+           let sx = 0, sy = 0, sWidth = iWidth, sHeight = iHeight;
+           
+           if (r_i > r_c) {
+             sWidth = iHeight * r_c;
+             sx = (iWidth - sWidth) / 2;
+           } else {
+             sHeight = iWidth / r_c;
+             sy = (iHeight - sHeight) / 2;
+           }
+           
+           // Zoom
+           if (zoomLevel > 1) {
+             const zoomedSWidth = sWidth / zoomLevel;
+             const zoomedSHeight = sHeight / zoomLevel;
+             sx = sx + (sWidth - zoomedSWidth) / 2;
+             sy = sy + (sHeight - zoomedSHeight) / 2;
+             sWidth = zoomedSWidth;
+             sHeight = zoomedSHeight;
+           }
+
+           ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, cWidth, cHeight);
+        } else {
+           // Direct video drawing
+           const video = videoRef.current;
+           if (!video) throw new Error('Video stream not available');
+
+           const vWidth = video.videoWidth;
+           const vHeight = video.videoHeight;
+           const cWidth = canvas.width;
+           const cHeight = canvas.height;
+           
+           const r_v = vWidth / vHeight;
+           const r_c = cWidth / cHeight;
+
+           let sx = 0, sy = 0, sWidth = vWidth, sHeight = vHeight;
+
+           if (r_v > r_c) {
+             sWidth = vHeight * r_c;
+             sx = (vWidth - sWidth) / 2;
+           } else {
+             sHeight = vWidth / r_c;
+             sy = (vHeight - sHeight) / 2;
+           }
+
+           if (zoomLevel > 1) {
+             const zoomedSWidth = sWidth / zoomLevel;
+             const zoomedSHeight = sHeight / zoomLevel;
+             
+             sx = sx + (sWidth - zoomedSWidth) / 2;
+             sy = sy + (sHeight - zoomedSHeight) / 2;
+             sWidth = zoomedSWidth;
+             sHeight = zoomedSHeight;
+           }
+
+           ctx.save();
+           ctx.translate(cWidth, 0);
+           ctx.scale(-1, 1);
+           ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, cWidth, cHeight);
+           ctx.restore();
         }
 
-        // Capture frame from video
-        const captureResult = await captureFrame(dimensions.width, dimensions.height);
-
-        // Composite frame overlay if selected
-        let finalBlob = captureResult.blob;
+        // 2. Draw Frame Overlay
         if (selectedFrame !== 'none') {
-          const selectedFrameData = frames.find(f => f.id === selectedFrame);
-          if (selectedFrameData?.image) {
-            // Load frame image
-            const frameImg = new Image();
-            frameImg.crossOrigin = 'anonymous';
-            
-            await new Promise((resolve, reject) => {
-              frameImg.onload = resolve;
-              frameImg.onerror = () => reject(new Error('Failed to load frame'));
-              frameImg.src = selectedFrameData.image;
-            });
-
-            // Create canvas for compositing
-            const canvas = document.createElement('canvas');
-            canvas.width = dimensions.width;
-            canvas.height = dimensions.height;
-            const ctx = canvas.getContext('2d');
-
-            // Draw captured image
-            const capturedImg = new Image();
-            await new Promise((resolve, reject) => {
-              capturedImg.onload = resolve;
-              capturedImg.onerror = reject;
-              capturedImg.src = URL.createObjectURL(captureResult.blob);
-            });
-            
-            ctx.drawImage(capturedImg, 0, 0, canvas.width, canvas.height);
-
-            // Draw frame overlay on top
-            ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
-
-            // Convert to blob
-            finalBlob = await new Promise((resolve) => {
-              canvas.toBlob(resolve, 'image/png', 1.0);
-            });
-          }
+           const frameEl = document.querySelector('.frame-overlay');
+           if (frameEl && frameEl.complete) {
+              ctx.drawImage(frameEl, 0, 0, canvas.width, canvas.height);
+           } else {
+              const selectedFrameData = frames.find(f => f.id === selectedFrame);
+              if (selectedFrameData?.image) {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                await new Promise((resolve, reject) => {
+                   img.onload = resolve;
+                   img.onerror = reject;
+                   img.src = selectedFrameData.image;
+                });
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              }
+           }
         }
 
-        // Store composited image and show preview
-        const imageUrl = URL.createObjectURL(finalBlob);
-        setCapturedImage({
+        // 3. Export Initial Image (Fast - JPEG)
+        const initialBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+        const fileId = uuidv4();
+        
+        // Show preview IMMEDIATELY with uncompressed image
+        const imageUrl = URL.createObjectURL(initialBlob);
+        const initialImageState = {
           url: imageUrl,
-          blob: finalBlob,
+          blob: initialBlob,
           metadata: {
+            id: fileId,
             frameId: selectedFrame,
             capturedAt: new Date().toISOString(),
             width: dimensions.width,
             height: dimensions.height,
+            size: initialBlob.size,
+            fileName: `${fileId}.jpg`
           }
-        });
+        };
         
-        // Hide processing and show preview
+        setCapturedImage(initialImageState);
         setIsProcessing(false);
         setShowPreview(true);
+
+        // 4. Compress in Background if needed (Max 2MB)
+        if (initialBlob.size > 2 * 1024 * 1024) {
+             setIsCompressing(true);
+             console.log(`Original size: ${(initialBlob.size / 1024 / 1024).toFixed(2)} MB. Starting background compression...`);
+             
+             // Wrap in async immediately to let main thread continue
+             (async () => {
+                 try {
+                     const options = {
+                       maxSizeMB: 2,
+                       useWebWorker: true,
+                       initialQuality: 0.9,
+                       alwaysKeepResolution: true,
+                       fileType: 'image/jpeg'
+                     };
+                     
+                     const compressedBlob = await imageCompression(new File([initialBlob], "temp.jpg", { type: "image/jpeg" }), options);
+                     console.log(`Compressed size: ${(compressedBlob.size / 1024 / 1024).toFixed(2)} MB`);
+                     
+                     // Update state only if we still have the same image
+                     setCapturedImage(prev => {
+                        if (prev && prev.metadata.id === fileId) {
+                            return {
+                                ...prev,
+                                blob: compressedBlob,
+                                metadata: {
+                                    ...prev.metadata,
+                                    size: compressedBlob.size,
+                                    compressed: true
+                                }
+                            };
+                        }
+                        return prev; // Context changed (retake clicked)
+                     });
+                 } catch (compError) {
+                    console.warn('Background compression failed:', compError);
+                 } finally {
+                    setIsCompressing(false);
+                 }
+             })();
+        }
       } catch (err) {
         console.error('Capture failed:', err);
-        // Show more detailed error
         const errorMsg = err.message || 'Failed to capture image. Please try again.';
         alert(errorMsg);
-        setIsProcessing(false);  // Hide processing on error
+        setIsProcessing(false);
       } finally {
         setIsCapturing(false);
       }
@@ -227,6 +335,7 @@ export const CaptureScreen = ({
     }
     setCapturedImage(null);
     setShowPreview(false);
+    setIsCompressing(false); // Cancel compression UI
   };
 
   /**
@@ -235,7 +344,7 @@ export const CaptureScreen = ({
   const handleConfirm = () => {
     if (onCapture && capturedImage) {
       onCapture({
-        blob: capturedImage.blob,
+        blob: capturedImage.blob, // Will be compressed blob if ready, or uncompressed if early/small
         metadata: capturedImage.metadata,
       });
     }
@@ -584,6 +693,7 @@ export const CaptureScreen = ({
               autoPlay
               playsInline
               muted
+              webkit-playsinline="true"
               className={`camera-preview ${!isInitialized ? 'camera-loading' : ''}`}
               aria-label="Camera preview"
               style={{
@@ -592,7 +702,8 @@ export const CaptureScreen = ({
                 objectFit: 'cover',
                 objectPosition: 'center',
                 transform: `scale(${zoomLevel})`,
-                transition: 'transform 0.2s ease'
+                transition: 'transform 0.2s ease',
+                WebkitTransform: `scale(${zoomLevel})`,
               }}
             />
           )}
@@ -783,19 +894,20 @@ export const CaptureScreen = ({
 
       {/* Preview Overlay */}
       {showPreview && capturedImage && (
-        <div className="preview-overlay">
-          <div className="preview-image-container">
+        <div className="capture-preview-overlay">
+          <div className="capture-preview-image-container">
             <img 
               src={capturedImage.url} 
               alt="Captured" 
-              className="preview-image"
+              className="capture-preview-image"
             />
           </div>
           
-          <div className="preview-actions">
+          <div className="capture-preview-actions">
             <button 
-              className="btn-preview btn-retake"
+              className="capture-btn-preview capture-btn-retake"
               onClick={handleRetake}
+              disabled={isLoading}
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
@@ -805,13 +917,30 @@ export const CaptureScreen = ({
             </button>
             
             <button 
-              className="btn-preview btn-confirm"
+              className="capture-btn-preview capture-btn-confirm"
               onClick={handleConfirm}
+              disabled={isLoading || isCompressing}
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              Continue
+              {isCompressing ? (
+                 <span style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                    <span className="spinner" style={{
+                        display: 'inline-block',
+                        width: '18px', 
+                        height: '18px', 
+                        borderWidth: '2px',
+                        borderColor: 'rgba(255,255,255,0.3)',
+                        borderTopColor: '#fff'
+                    }}></span>
+                    <span>Optimizing...</span>
+                 </span>
+              ) : (
+                 <>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Continue
+                 </>
+              )}
             </button>
           </div>
         </div>
