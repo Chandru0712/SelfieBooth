@@ -106,6 +106,7 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
   const imglyModuleRef = useRef<ImglyModule | null>(null);
   const processingStartRef = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const frameScrollRef = useRef<HTMLDivElement>(null);
 
   const backgroundList = useMemo(() => {
     const backgrounds = import.meta.glob('../../../assets/Frames/AI_Frame/*.{jpg,jpeg,png,webp}', {
@@ -129,6 +130,23 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
       console.error(`Failed to load background: ${filename}`);
     };
   }, []);
+
+  // Auto-select the first background on mount
+  useEffect(() => {
+    if (backgroundList.length > 0 && !activeBackgroundName) {
+      loadBackground(backgroundList[0] as string);
+    }
+  }, [backgroundList, activeBackgroundName, loadBackground]);
+
+  // Scroll to selected background whenever it changes
+  useEffect(() => {
+    if (!frameScrollRef.current || !activeBackgroundName) return;
+    const track = frameScrollRef.current;
+    const selected = track.querySelector('.frame-item.is-selected') as HTMLElement;
+    if (selected) {
+      selected.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [activeBackgroundName]);
 
   const waitForPaint = (): Promise<void> =>
     new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
@@ -498,10 +516,15 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
     const previewCanvas = canvasRef.current;
     if (!previewCanvas) return;
 
+    // Step 1: Trigger the white camera flash
     setIsFlashing(true);
-    setIsProcessingCapture(true);
     setCaptureError(null);
     setProcessingTimeMs(null);
+
+    // Step 2: Wait for flash animation to complete (300ms), then show processing overlay
+    await new Promise(resolve => setTimeout(resolve, 350));
+    setIsFlashing(false);
+    setIsProcessingCapture(true);
     processingStartRef.current = performance.now();
 
     try {
@@ -541,7 +564,6 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
       console.error('Foreground capture failed.', error);
       setCaptureError('Masking failed. Please try again.');
     } finally {
-      setTimeout(() => setIsFlashing(false), 120);
       setIsProcessingCapture(false);
       if (processingStartRef.current !== null) {
         setProcessingTimeMs(Math.round(performance.now() - processingStartRef.current));
@@ -675,7 +697,7 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
             {isFlashing && <div className="screen-flash" />}
             {/* PROCESSING OVERLAY - Image Mask Processing */}
             {isProcessingCapture && (
-              <div className="processing-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", zIndex: 10005, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.5)" }}>
+              <div className="processing-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", zIndex: 10005, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#0a0a1a" }}>
                 <div className="processing-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                   <div className="spinner"/>
                   <div className="processing-text" style={{ color: "white", fontSize: "5rem", marginTop: 20 }}>Processing...</div>
@@ -690,7 +712,7 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
 
       {/* SECTION 4: Frame Selector */}
       <div className="layout-frame-selector">
-        <div className="frame-track">
+        <div className="frame-track" ref={frameScrollRef}>
           {backgroundList.map((bg) => (
             <button
               key={bg}

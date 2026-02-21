@@ -64,6 +64,16 @@ export const CaptureScreen = ({
     };
   }, []);
 
+  // Scroll to the selected frame whenever it changes so it's always visible
+  useEffect(() => {
+    if (!frameScrollRef.current || !selectedFrame) return;
+    const track = frameScrollRef.current;
+    const selected = track.querySelector('.frame-item.is-selected') as HTMLElement;
+    if (selected) {
+      selected.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [selectedFrame]);
+
   const getCaptureDimensions = () => {
     const container = previewContainerRef.current;
     if (!container) return null;

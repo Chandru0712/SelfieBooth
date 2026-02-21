@@ -42,12 +42,12 @@
   content: "";
   position: absolute;
   inset: -20px; /* Slight bleed to prevent crisp edges from blurring */
-  background-image:url(../../../assets/BG_W.png);
+  background-image:url(../../../assets/selfiebooth_4k_2160x3840.png);
   background-position: center;
   background-size: contain;
   background-repeat: no-repeat;
   background-attachment: fixed;
-  opacity: 0.8; /* Adjust visibility of image to blend with background */
+  opacity: 0.5; /* Adjust visibility of image to blend with background */
   z-index: -2;
 }
 
@@ -255,7 +255,7 @@
 
 .selection-main-title {
   font-family: 'Arial', sans-serif;
-  font-size: 256px; /* Responsive, not 154px */
+  font-size: 156px; /* Responsive, not 154px */
   font-weight: 700;
   color: #fff;
   /* text-transform: uppercase; */
@@ -530,22 +530,23 @@
   margin-top: 50px;
   margin-bottom: 50px;
   min-height: 160px;
-  padding: 20px;
   width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.layout-frame-selector::-webkit-scrollbar {
+  display: none;
 }
 
 .frame-track {
   display: flex;
   gap: 30px;
-  overflow-x: auto;
-  justify-content: center; /* flex-start replaces center to permit proper horizontal scrolling */
-  padding: 20px; /* add some space for potential scrollbars */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
-}
-
-.frame-track::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+  min-width: 100%;
+  width: max-content;
+  margin: 0 auto;
+  padding: 28px 40px;
 }
 
 .frame-item {
