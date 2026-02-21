@@ -242,8 +242,8 @@ class CameraService {
       const constraints = {
         video: {
           deviceId: { exact: deviceId },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: 3840, min: 1920 },
+          height: { ideal: 2160, min: 1080 },
         },
         audio: false,
       };

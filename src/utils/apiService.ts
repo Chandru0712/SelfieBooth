@@ -46,6 +46,12 @@ export const getResponseUrl = (payload: UploadResponse | null, uploadName: strin
 
   const UPLOADS_BASE_URL = API_CONFIG.UPLOADS_BASE_URL || 'https://svsinfotech.in/zooimage/uploads/';
 
+  // Try status field — if status is error/failed, short-circuit
+  const statusField = (payload as Record<string, unknown>)['status'];
+  if (typeof statusField === 'string' && (statusField === 'error' || statusField === 'failed')) {
+    return '';
+  }
+
   if (typeof payload === 'string') {
     return '';
   }
@@ -61,14 +67,18 @@ export const getResponseUrl = (payload: UploadResponse | null, uploadName: strin
     return `${UPLOADS_BASE_URL}${fileName || trimmed.replace(/^\/+/, '')}`;
   }
 
-  // Try filename fields
+  // Try filename fields (PHP often responds with these)
   const name =
-    getStringField(payload, 'image_name') ||
     getStringField(payload, 'filename') ||
+    getStringField(payload, 'file_name') ||
+    getStringField(payload, 'image_name') ||
     getStringField(payload, 'file') ||
     getStringField(payload, 'name');
   if (name && name.trim()) {
-    return `${UPLOADS_BASE_URL}${name}`;
+    const trimmed = name.trim();
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    const fileNameOnly = trimmed.split('/').filter(Boolean).pop() || trimmed;
+    return `${UPLOADS_BASE_URL}${fileNameOnly}`;
   }
 
   // Try image_path
@@ -116,21 +126,23 @@ export const uploadImageAndGenerateQR = async (
     const originalExt = getOriginalExt(fileName);
     const uploadName = `img_${uid}${originalExt}`;
 
-    // Compress image
+    // Compress image to stay within PHP server's upload limits (2MB safe ceiling)
     const compressionOptions = {
-      maxSizeMB: 0.5,
-      maxWidthOrHeight: 1280,
+      maxSizeMB: 2,
+      maxWidthOrHeight: 2560,
+      initialQuality: 0.92,
       useWebWorker: true,
+      fileType: "image/jpeg",
     };
 
-    console.log('🗜️  Compressing image...');
+    console.log('🗜️  Compressing image for upload...');
     const compressedBlob = await imageCompression(blob as unknown as File, compressionOptions);
     console.log('✅ Compression complete:', `${(compressedBlob.size / 1024 / 1024).toFixed(2)}MB`);
 
     // Create FormData
     const formData = new FormData();
-    const compressedFile = new File([compressedBlob], uploadName, {
-      type: compressedBlob.type || blob.type,
+    const compressedFile = new File([compressedBlob], uploadName.replace(/\.[^/.]+$/, ".jpg"), {
+      type: "image/jpeg",
     });
     formData.append('image', compressedFile);
     formData.append('uid', uid);
@@ -177,6 +189,14 @@ export const uploadImageAndGenerateQR = async (
     if (isJson) {
       responseData = await response.json();
       console.log('✅ JSON response received:', responseData);
+
+      // Handle PHP-style status field { status: "error", message: "..." }
+      const phpStatus = (responseData as any)?.status;
+      if (phpStatus === 'error' || phpStatus === 'failed') {
+        const phpMsg = (responseData as any)?.message || 'Upload rejected by server';
+        console.error('❌ PHP error response:', phpMsg);
+        return { success: false, error: phpMsg };
+      }
     } else {
       // Non-JSON response - treat as success
       const textResponse = await response.text();

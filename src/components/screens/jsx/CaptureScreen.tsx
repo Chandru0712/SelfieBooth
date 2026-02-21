@@ -75,7 +75,19 @@ export const CaptureScreen = ({
     if (!video || !video.videoWidth || !video.videoHeight) {
       return { width: containerWidth, height: containerHeight };
     }
-    return { width: containerWidth, height: containerHeight };
+    
+    // Capture at the highest native camera resolution that matches the frame's aspect ratio
+    const aspect = containerWidth / containerHeight;
+    let captureHeight = video.videoHeight;
+    let captureWidth = captureHeight * aspect;
+
+    // If the required width exceeds the camera's max width, scale by width instead
+    if (captureWidth > video.videoWidth) {
+      captureWidth = video.videoWidth;
+      captureHeight = captureWidth / aspect;
+    }
+    
+    return { width: Math.round(captureWidth), height: Math.round(captureHeight) };
   };
 
   const handleCaptureClick = async () => {
@@ -203,13 +215,14 @@ export const CaptureScreen = ({
         let finalImageState = initialImageState;
         console.log("🖼️ Initial blob generated. Size:", initialBlob.size, "- Checking if compression is needed.");
 
-        if (initialBlob.size > 2 * 1024 * 1024) {
+        if (initialBlob.size > 8 * 1024 * 1024) {
           if (isMountedRef.current) setIsCompressing(true);
           try {
             const options = {
-              maxSizeMB: 2,
+              maxSizeMB: 8,
+              maxWidthOrHeight: 4000,
               useWebWorker: true,
-              initialQuality: 0.9,
+              initialQuality: 0.95,
               alwaysKeepResolution: true,
               fileType: "image/jpeg",
             };

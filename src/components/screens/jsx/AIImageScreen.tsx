@@ -4,6 +4,7 @@ import { SelfieSegmentation, Results } from '@mediapipe/selfie_segmentation';
 import { Camera } from '@mediapipe/camera_utils';
 import { v4 as uuidv4 } from 'uuid';
 import PreviewScreen from './PreviewScreen';
+import '../styles/screens.css';
 import '../styles/AIImageScreen.css';
 
 interface ImglyModule {
@@ -24,8 +25,8 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
   const MASK_EDGE_BLUR_PX = 4; // Reduced blur for sharper edges
   const FINAL_REMOVAL_MODEL = 'medium'; // Use 'medium' for better compatibility (isnet requires local hosting)
   const FINAL_REMOVAL_DEVICE = 'cpu'; // Use CPU for better compatibility
-  const FINAL_OUTPUT_MIME = 'image/png';
-  const FINAL_OUTPUT_QUALITY = 1;
+  const FINAL_OUTPUT_MIME = 'image/jpeg';
+  const FINAL_OUTPUT_QUALITY = 0.95;
   const ENABLE_IMGLY_PRELOAD = true;
   const FLIP_HORIZONTAL = true; // mirror camera like a selfie
   const MEDIAPIPE_BASE_URL = '/models/';
@@ -40,6 +41,59 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
   const [processingTimeMs, setProcessingTimeMs] = useState<number | null>(null);
   const [activeBackgroundName, setActiveBackgroundName] = useState<string | null>(null);
   const [frameDimensions, setFrameDimensions] = useState<{ width: number; height: number }>({ width: 640, height: 480 });
+  const [previewDimensions, setPreviewDimensions] = useState({ width: "80%", height: "auto" });
+
+  useEffect(() => {
+    const computeDimensions = () => {
+      const { width: frameWidth, height: frameHeight } = frameDimensions;
+      if (!frameWidth || !frameHeight) return;
+      
+      const ratio = frameWidth / frameHeight;
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+
+      const verticalReserve = 380;
+      const horizontalPadding = 40; 
+
+      const maxW = screenWidth - horizontalPadding;
+      const maxH = screenHeight - verticalReserve;
+
+      let targetW = maxW;
+      let targetH = targetW / ratio;
+
+      if (targetH > maxH) {
+        targetH = maxH;
+        targetW = targetH * ratio;
+      }
+
+      const minH = 250;
+      if (targetH < minH) {
+         targetH = minH;
+         targetW = targetH * ratio;
+      }
+
+      setPreviewDimensions({
+        width: `${Math.round(targetW)}px`,
+        height: `${Math.round(targetH)}px`,
+      });
+    };
+
+    computeDimensions();
+    
+    let resizeTimeout: NodeJS.Timeout;
+    const debouncedResize = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(computeDimensions, 150);
+    };
+    
+    window.addEventListener("resize", debouncedResize);
+    window.addEventListener("orientationchange", computeDimensions);
+    return () => {
+      window.removeEventListener("resize", debouncedResize);
+      window.removeEventListener("orientationchange", computeDimensions);
+      clearTimeout(resizeTimeout);
+    };
+  }, [frameDimensions.width, frameDimensions.height]);
   const [showCapturePreview, setShowCapturePreview] = useState<boolean>(false);
   const [capturePreviewBlob, setCapturePreviewBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -105,15 +159,15 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
       img.src = url;
     });
 
-  const captureRawVideoFrameBlob = async (): Promise<Blob> => {
+  const captureRawVideoFrameBlob = async (dims: { width: number; height: number }): Promise<Blob> => {
     const video = webcamRef.current?.video;
     if (!video || video.readyState < 2) {
       throw new Error('Camera frame is not ready.');
     }
 
-    // Use frame dimensions for capture to match the selected background
-    const width = frameDimensions.width;
-    const height = frameDimensions.height;
+    // Capture using maximal bounds instead of display/frame bounds
+    const width = dims.width;
+    const height = dims.height;
     const frameCanvas = document.createElement('canvas');
     frameCanvas.width = width;
     frameCanvas.height = height;
@@ -167,7 +221,7 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
             canvas.toBlob((result) => {
               URL.revokeObjectURL(url);
               resolve(result || blob);
-            }, 'image/png', quality);
+            }, 'image/jpeg', quality);
           } else {
             resolve(blob);
           }
@@ -180,11 +234,12 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
     return compressedBlob;
   };
 
-  const composeForegroundWithBackground = async (foregroundBlob: Blob): Promise<HTMLCanvasElement> => {
+  const composeForegroundWithBackground = async (foregroundBlob: Blob, dims: { width: number; height: number }): Promise<HTMLCanvasElement> => {
     const foregroundImage = await blobToImage(foregroundBlob);
-    // Use frame dimensions instead of foreground image dimensions
-    const width = frameDimensions.width;
-    const height = frameDimensions.height;
+    
+    // Fill to the maximal captured resolution bounds
+    const width = dims.width;
+    const height = dims.height;
 
     const exportCanvas = document.createElement('canvas');
     exportCanvas.width = width;
@@ -343,8 +398,8 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
             await selfieSegmentation.send({ image: frame });
           }
         },
-        width: 1920,
-        height: 1080
+        width: 3840,
+        height: 2160
       });
       camera.start();
     };
@@ -423,6 +478,22 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
     }, 1000);
   };
 
+  const getCaptureDimensions = (): { width: number; height: number } => {
+    const video = webcamRef.current?.video;
+    if (!video || !video.videoWidth || !video.videoHeight || !frameDimensions.width || !frameDimensions.height) {
+       return frameDimensions;
+    }
+    const aspect = frameDimensions.width / frameDimensions.height;
+    let height = video.videoHeight;
+    let width = height * aspect;
+
+    if (width > video.videoWidth) {
+       width = video.videoWidth;
+       height = width / aspect;
+    }
+    return { width: Math.round(width), height: Math.round(height) };
+  };
+
   const captureAndSave = async (): Promise<void> => {
     const previewCanvas = canvasRef.current;
     if (!previewCanvas) return;
@@ -435,7 +506,8 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
 
     try {
       await waitForPaint();
-      const rawFrameBlob = await captureRawVideoFrameBlob();
+      const dims = getCaptureDimensions();
+      const rawFrameBlob = await captureRawVideoFrameBlob(dims);
       const imglyModule = await getImglyModule();
       const removeBackground = imglyModule?.default || imglyModule?.removeBackground;
 
@@ -458,7 +530,7 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
       const foregroundBlob = await removeBackground(rawFrameBlob, config);
 
       // Composite the cutout with the selected background
-      const finalCanvas = await composeForegroundWithBackground(foregroundBlob);
+      const finalCanvas = await composeForegroundWithBackground(foregroundBlob, dims);
       const finalBlob = await canvasToBlob(finalCanvas, FINAL_OUTPUT_MIME, FINAL_OUTPUT_QUALITY);
       
       // Show preview instead of downloading immediately
@@ -483,10 +555,10 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
 
     try {
       setIsProcessingCapture(true);
-      // Compress image to under 2MB
-      const compressedBlob = await compressImage(capturePreviewBlob, 2);
+      // Compress image to under 8MB to preserve native 4K quality
+      const compressedBlob = await compressImage(capturePreviewBlob, 8);
       // Generate UUID v4 filename
-      const fileName = `${uuidv4()}.png`;
+      const fileName = `${uuidv4()}.jpg`;
       
       // Create image data object for preview screen
       const imageData = {
@@ -496,8 +568,8 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
           id: uuidv4(),
           frameId: '',
           capturedAt: new Date().toISOString(),
-          width: frameDimensions.width,
-          height: frameDimensions.height,
+          width: getCaptureDimensions().width,
+          height: getCaptureDimensions().height,
           size: compressedBlob.size,
           fileName: fileName,
         },
@@ -523,214 +595,141 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
   };
 
   return (
-    <div className="capture-screen">
-      {/* Header with Back Button and Title */}
-      <header className="capture-header">
-        <button
-          className="btn-icon btn-back"
-          onClick={onBack}
-          aria-label="Go back to selection"
-        >
-          <svg
-            width="32"
-            height="32"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M19 12H5M12 19l-7-7 7-7" />
+    <div className="capture-screen-modern">
+      {/* SECTION 1: Top Header */}
+      <div className="layout-header">
+        <button className="back-circle-btn" onClick={onBack}>
+          <svg width="75" height="75" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <h1 className="capture-title">AI Background</h1>
-          <p className="ai-capture-subtitle">SELECT FRAME</p>
-        </div>
-        <div className="btn-icon-spacer"></div>
-      </header>
+        <h1 className="category-title">AI Background</h1>
+        <div style={{ width: 44 }} /> 
+      </div>
 
-      <main className="capture-main">
-        {/* Controls at the top */}
-        <div className="control-panel-vertical">
-          {/* Circular Capture Button */}
-          <button
-            onClick={startPhotoProcess}
-            disabled={timer > 0 || isProcessingCapture}
-            className="btn-capture-circle"
-            aria-label="Take photo"
-          >
-            <div className="capture-ring"></div>
+      {/* SECTION 2: Control Panel (Timer, Capture, Zoom) */}
+      <div className="layout-controls" style={{ flexDirection: "column", gap: 20 }}>
+        <button className="main-shutter-btn" onClick={startPhotoProcess} disabled={timer > 0 || isProcessingCapture}>
+          <div className="shutter-inner" />
+        </button>
+
+        <div className="control-group" ref={dropdownRef} style={{ marginTop: 50}}>
+          <button className="sub-control-btn" onClick={() => setIsCountdownDropdownOpen(!isCountdownDropdownOpen)} disabled={timer > 0 || isProcessingCapture}>
+            <small>TIMER</small>
+            <strong>{selectedCountdown}s</strong>
           </button>
-
-          {/* Timer Dropdown Selector */}
-          <div ref={dropdownRef} className="timer-dropdown-container">
-            <button
-              onClick={() => setIsCountdownDropdownOpen(!isCountdownDropdownOpen)}
-              disabled={timer > 0 || isProcessingCapture}
-              className="timer-dropdown-btn"
-              aria-label="Select timer"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="13" r="8"></circle>
-                <path d="M12 9v4l2 2"></path>
-                <path d="M16 2l-4 4M8 2l4 4"></path>
-              </svg>
-              <span>{selectedCountdown}s</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points={isCountdownDropdownOpen ? "18 15 12 9 6 15" : "6 9 12 15 18 9"}></polyline>
-              </svg>
-            </button>
-
-            {/* Dropdown Menu */}
-            {isCountdownDropdownOpen && (
-              <div className="timer-dropdown-menu">
-                {[5, 10, 15, 20, 25, 30].map((seconds) => (
-                  <button
-                    key={seconds}
-                    onClick={() => {
-                      setSelectedCountdown(seconds);
-                      setIsCountdownDropdownOpen(false);
-                    }}
-                    className={`timer-dropdown-option ${selectedCountdown === seconds ? 'selected' : ''}`}
-                  >
-                    {seconds} seconds
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {isCountdownDropdownOpen && (
+            <div className="popup-overlay" style={{ maxHeight: 'none', overflowY: 'visible', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {[5, 10, 15, 20, 25, 30].map(v => (
+                <button 
+                  key={v} 
+                  className={selectedCountdown === v ? "active-option" : ""}
+                  onClick={() => {setSelectedCountdown(v); setIsCountdownDropdownOpen(false);}}
+                  style={{ width: '50%' }}
+                >
+                  {v}s
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+      </div>
 
-        {/* Camera Preview in the middle */}
-        <div className="preview-container-wrapper">
-          <div className="preview-inner-container" style={{ aspectRatio: `${frameDimensions.width} / ${frameDimensions.height}` }}>
+      {/* SECTION 3: Dynamic Preview Container */}
+      <div className="layout-preview-area">
+        <div 
+          className="camera-wrapper"
+          style={{ 
+            width: previewDimensions.width, 
+            height: previewDimensions.height, 
+            position: "relative",
+            margin: "0 auto",
+            flexShrink: 0
+          }}
+        >
+          <div 
+            className="camera-box" 
+            style={{ width: "100%", height: "100%" }}
+          >
             {/* Hidden Webcam */}
-            <Webcam ref={webcamRef} style={{ display: 'none' }} width={frameDimensions.width} height={frameDimensions.height} />
+            <Webcam 
+              ref={webcamRef} 
+              style={{ display: 'none' }} 
+              width={frameDimensions.width} 
+              height={frameDimensions.height} 
+              videoConstraints={{
+                width: { ideal: 3840, min: 1920 },
+                height: { ideal: 2160, min: 1080 },
+                facingMode: "user"
+              }}
+            />
 
             {/* Main Display Canvas */}
             <canvas
               ref={canvasRef}
               width={frameDimensions.width}
               height={frameDimensions.height}
-              className="camera-preview-canvas"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
             ></canvas>
 
-            {/* COUNTDOWN OVERLAY */}
-            {timer > 0 && (
-              <div className="countdown-overlay">
-                <div className="countdown-number">{timer}</div>
-              </div>
-            )}
-
-            {/* FLASH OVERLAY */}
-            {isFlashing && (
-              <div>
-                <div className="flash-effect"></div>
-                {/* Processing Info Overlay on White Screen - Centered */}
-                <div className="flash-info-overlay">
-                  {/* Animated Spinner Circle */}
-                  <div className="spinner-container">
-                    {/* Outer rotating ring */}
-                    <div className="spinner-ring"/>
-                    {/* Inner pulse circle */}
-                    <div className="spinner-pulse"/>
-                  </div>
-                  {/* Processing Text */}
-                  <div className="flash-processing-text">
-                    Processing...
-                  </div>
-                  {/* Subtext */}
-                  <div className="flash-processing-subtext">
-                    Creating AI Background Mask
-                  </div>
-                  {/* Animated dots */}
-                  <div className="animated-dots-container">
-                    {[0, 1, 2].map((index) => (
-                      <div
-                        key={index}
-                        className="animated-dot"
-                        style={{ animationDelay: `${index * 0.2}s` }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
+            {isFlashing && <div className="screen-flash" />}
             {/* PROCESSING OVERLAY - Image Mask Processing */}
             {isProcessingCapture && (
-              <div className="processing-overlay">
-                <div className="processing-content">
-                  {/* Spinner Animation */}
+              <div className="processing-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", zIndex: 10005, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.5)" }}>
+                <div className="processing-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                   <div className="spinner"/>
-                  {/* Processing Text */}
-                  <div className="processing-text">
-                    Processing...
-                  </div>
-                  {/* Subtext */}
-                  <div className="processing-subtext">
-                    Creating AI Background Mask
-                  </div>
+                  <div className="processing-text" style={{ color: "white", fontSize: "5rem", marginTop: 20 }}>Processing...</div>
+                  <div className="processing-subtext" style={{ color: "white", fontSize: "2rem", marginTop: 10 }}>Background Mask</div>
                 </div>
               </div>
             )}
           </div>
+          {timer > 0 && <div key={timer} className="countdown-text">{timer}</div>}
         </div>
+      </div>
 
-        {/* Frame Selector at the bottom */}
-        <section className="frame-selector-section capture-main-section">
-          <div className="frame-selector-scroll">
-            {backgroundList.map((bg) => (
-              <button
-                key={bg}
-                onClick={() => loadBackground(bg)}
-                className={`frame-option ${
-                  activeBackgroundName === bg ? 'selected' : ''
-                }`}
-                aria-label={`Select frame ${bg.split('/').pop()}`}
-              >
-                <img
-                  src={bg}
-                  alt={bg.split('/').pop() || 'Frame'}
-                  className="frame-thumbnail"
-                />
-              </button>
-            ))}
-          </div>
-        </section>
+      {/* SECTION 4: Frame Selector */}
+      <div className="layout-frame-selector">
+        <div className="frame-track">
+          {backgroundList.map((bg) => (
+            <button
+              key={bg}
+              className={`frame-item ${activeBackgroundName === bg ? "is-selected" : ""}`}
+              onClick={() => setTimeout(() => loadBackground(bg), 0)}
+            >
+              <img src={bg} alt={bg.split('/').pop() || 'Frame'} draggable="false" />
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* Status Messages */}
-        {processingTimeMs !== null && (
-          <p className="ai-capture-processing">Processed in {(processingTimeMs / 1000).toFixed(2)}s</p>
-        )}
-        {captureError && <p className="ai-capture-error">{captureError}</p>}
+      {processingTimeMs !== null && (
+        <p className="ai-capture-processing" style={{ display: 'none' }}>Processed in {(processingTimeMs / 1000).toFixed(2)}s</p>
+      )}
+      {captureError && <p className="ai-capture-error" style={{ display: 'none' }}>{captureError}</p>}
 
-        {/* Capture Preview Overlay - Using Common PreviewScreen */}
-        <PreviewScreen
-          imageData={capturePreviewBlob ? {
-            url: previewUrl || '',
-            blob: capturePreviewBlob,
-            metadata: {
-              id: uuidv4(),
-              frameId: '',
-              capturedAt: new Date().toISOString(),
-              width: frameDimensions.width,
-              height: frameDimensions.height,
-              size: capturePreviewBlob.size,
-              fileName: `${uuidv4()}.png`,
-            },
-          } : null}
-          isVisible={showCapturePreview}
-          isLoading={isProcessingCapture}
-          onRetake={handleRetakeCapture}
-          onContinue={() => {
-            // Preview screen handles upload and QR code
-          }}
-          showAsOverlay={true}
-        />
-      </main>
+      <PreviewScreen
+        imageData={capturePreviewBlob ? {
+          url: previewUrl || '',
+          blob: capturePreviewBlob,
+          metadata: {
+            id: uuidv4(),
+            frameId: '',
+            capturedAt: new Date().toISOString(),
+            width: getCaptureDimensions().width,
+            height: getCaptureDimensions().height,
+            size: capturePreviewBlob.size,
+            fileName: `${uuidv4()}.jpg`,
+          },
+        } : null}
+        isVisible={showCapturePreview}
+        isLoading={isProcessingCapture}
+        onRetake={handleRetakeCapture}
+        onContinue={() => {
+          // Preview screen handles upload and QR code
+        }}
+        showAsOverlay={true}
+      />
     </div>
   );
 }
