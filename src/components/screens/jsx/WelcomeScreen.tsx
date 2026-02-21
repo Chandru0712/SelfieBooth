@@ -74,14 +74,22 @@ export const WelcomeScreen = ({ onStart = () => {} }: WelcomeScreenProps) => {
       <div className={`welcome-content ${isAnimating ? 'animated' : ''}`}>
         {/* Logo/Brand */}
         <div className="welcome-logo-container">
-          <div className="welcome-logo">📸</div>
-          <h1 className="welcome-title">SelfieBooth Pro</h1>
+          <div className="welcome-logo">SNAPSHOT</div>
         </div>
 
-        {/* Simple tap instruction */}
-        <div className="welcome-tap-instruction">
-          <p className="tap-text">Tap anywhere to start</p>
-          <div className="tap-indicator">👆</div>
+        {/* Vertical Title Stack */}
+        {/* <div className="welcome-title-container">
+          <h1 className="welcome-title-line">SELFIE</h1>
+          <h1 className="welcome-title-line">BOOTH</h1>
+          <h1 className="welcome-title-line highlight">PRO</h1>
+        </div> */}
+
+        {/* Glass Button Instruction */}
+        <div className="welcome-action-container">
+          <div className="glass-button-large">
+            <span className="tap-icon">👆</span>
+            <span className="tap-text">TAP TO START</span>
+          </div>
         </div>
       </div>
     </div>

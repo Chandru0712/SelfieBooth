@@ -16,6 +16,7 @@ export interface ImageData {
     height: number;
     size: number;
     fileName: string;
+    compressed?: boolean;
   };
 }
 

@@ -2,6 +2,9 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import Webcam from 'react-webcam';
 import { SelfieSegmentation, Results } from '@mediapipe/selfie_segmentation';
 import { Camera } from '@mediapipe/camera_utils';
+import { v4 as uuidv4 } from 'uuid';
+import PreviewScreen from './PreviewScreen';
+import '../styles/AIImageScreen.css';
 
 interface ImglyModule {
   default?: (blob: Blob, config: any) => Promise<Blob>;
@@ -9,7 +12,13 @@ interface ImglyModule {
   preload?: (config: any) => Promise<void>;
 }
 
-function App(): React.JSX.Element {
+interface AIImageScreenProps {
+  onBack?: () => void;
+  onGenerate?: (imageData: any) => void;
+  isLoading?: boolean;
+}
+
+function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): React.JSX.Element {
   // Segmentation tuning variables (change these and rebuild as needed)
   const MASK_THRESHOLD = 0.7; // 0.0 to 1.0 (lowered for better edge detection)
   const MASK_EDGE_BLUR_PX = 4; // Reduced blur for sharper edges
@@ -23,11 +32,17 @@ function App(): React.JSX.Element {
   const MEDIAPIPE_ASSET_VERSION = '2026-02-16';
 
   const [timer, setTimer] = useState<number>(0); // 0 = not taking photo
+  const [selectedCountdown, setSelectedCountdown] = useState<number>(5); // Countdown timer in seconds
+  const [isCountdownDropdownOpen, setIsCountdownDropdownOpen] = useState<boolean>(false); // Dropdown state
   const [isFlashing, setIsFlashing] = useState<boolean>(false); // For the white flash effect
   const [isProcessingCapture, setIsProcessingCapture] = useState<boolean>(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [processingTimeMs, setProcessingTimeMs] = useState<number | null>(null);
   const [activeBackgroundName, setActiveBackgroundName] = useState<string | null>(null);
+  const [frameDimensions, setFrameDimensions] = useState<{ width: number; height: number }>({ width: 640, height: 480 });
+  const [showCapturePreview, setShowCapturePreview] = useState<boolean>(false);
+  const [capturePreviewBlob, setCapturePreviewBlob] = useState<Blob | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const webcamRef = useRef<Webcam>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -36,6 +51,7 @@ function App(): React.JSX.Element {
   const thresholdMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const imglyModuleRef = useRef<ImglyModule | null>(null);
   const processingStartRef = useRef<number | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const backgroundList = useMemo(() => {
     const backgrounds = import.meta.glob('../../../assets/Frames/AI_Frame/*.{jpg,jpeg,png,webp}', {
@@ -52,6 +68,8 @@ function App(): React.JSX.Element {
     img.onload = (): void => {
       activeBackgroundRef.current = img; // Update active image used by draw loop
       setActiveBackgroundName(filename);
+      // Update canvas dimensions based on frame size
+      setFrameDimensions({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
     };
     img.onerror = (): void => {
       console.error(`Failed to load background: ${filename}`);
@@ -93,8 +111,9 @@ function App(): React.JSX.Element {
       throw new Error('Camera frame is not ready.');
     }
 
-    const width = video.videoWidth || 640;
-    const height = video.videoHeight || 480;
+    // Use frame dimensions for capture to match the selected background
+    const width = frameDimensions.width;
+    const height = frameDimensions.height;
     const frameCanvas = document.createElement('canvas');
     frameCanvas.width = width;
     frameCanvas.height = height;
@@ -118,19 +137,54 @@ function App(): React.JSX.Element {
     link.click();
   };
 
-  const downloadBlob = (blob: Blob): void => {
+  const downloadBlob = (blob: Blob, fileName?: string): void => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.download = `selfie_${Date.now()}.png`;
+    link.download = fileName || `selfie_${Date.now()}.png`;
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
   };
 
+  const compressImage = async (blob: Blob, maxSizeMB: number = 2): Promise<Blob> => {
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    if (blob.size <= maxSizeBytes) return blob;
+
+    let quality = 0.9;
+    let compressedBlob = blob;
+
+    while (compressedBlob.size > maxSizeBytes && quality > 0.1) {
+      compressedBlob = await new Promise((resolve) => {
+        const img = new Image();
+        const url = URL.createObjectURL(blob);
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob((result) => {
+              URL.revokeObjectURL(url);
+              resolve(result || blob);
+            }, 'image/png', quality);
+          } else {
+            resolve(blob);
+          }
+        };
+        img.src = url;
+      });
+      quality -= 0.1;
+    }
+
+    return compressedBlob;
+  };
+
   const composeForegroundWithBackground = async (foregroundBlob: Blob): Promise<HTMLCanvasElement> => {
     const foregroundImage = await blobToImage(foregroundBlob);
-    const width = foregroundImage.naturalWidth || foregroundImage.width || 640;
-    const height = foregroundImage.naturalHeight || foregroundImage.height || 480;
+    // Use frame dimensions instead of foreground image dimensions
+    const width = frameDimensions.width;
+    const height = frameDimensions.height;
 
     const exportCanvas = document.createElement('canvas');
     exportCanvas.width = width;
@@ -337,8 +391,25 @@ function App(): React.JSX.Element {
     };
   }, [ENABLE_IMGLY_PRELOAD, FINAL_REMOVAL_DEVICE, FINAL_REMOVAL_MODEL, getImglyModule]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent): void => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsCountdownDropdownOpen(false);
+      }
+    };
+
+    if (isCountdownDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isCountdownDropdownOpen]);
+
   const startPhotoProcess = (): void => {
-    setTimer(3); // Start at 3 seconds
+    setTimer(selectedCountdown); // Start at selected countdown value
 
     const countdown: NodeJS.Timeout = setInterval((): void => {
       setTimer((prev) => {
@@ -383,20 +454,17 @@ function App(): React.JSX.Element {
         progress: undefined // Disable progress callback for better performance
       };
 
-      let foregroundBlob;
-      try {
-        foregroundBlob = await removeBackground(rawFrameBlob, config);
-      } catch (gpuError) {
-        if (FINAL_REMOVAL_DEVICE !== 'gpu') throw gpuError;
-        foregroundBlob = await removeBackground(rawFrameBlob, {
-          ...config,
-          device: 'cpu'
-        });
-      }
+      // Remove background using imgly library
+      const foregroundBlob = await removeBackground(rawFrameBlob, config);
 
       // Composite the cutout with the selected background
       const finalCanvas = await composeForegroundWithBackground(foregroundBlob);
-      downloadCanvas(finalCanvas);
+      const finalBlob = await canvasToBlob(finalCanvas, FINAL_OUTPUT_MIME, FINAL_OUTPUT_QUALITY);
+      
+      // Show preview instead of downloading immediately
+      setCapturePreviewBlob(finalBlob);
+      setPreviewUrl(URL.createObjectURL(finalBlob));
+      setShowCapturePreview(true);
     } catch (error) {
       console.error('Foreground capture failed.', error);
       setCaptureError('Masking failed. Please try again.');
@@ -410,75 +478,260 @@ function App(): React.JSX.Element {
     }
   };
 
-  return (
-    <>
-      <div className="ai-capture-screen">
-        <header className="ai-capture-header">
-          <h1 className="ai-capture-title">Selfie Booth</h1>
-          <p className="ai-capture-subtitle">Live cutout with custom backgrounds</p>
-        </header>
+  const handleContinueCapture = async (): Promise<void> => {
+    if (!capturePreviewBlob) return;
+
+    try {
+      setIsProcessingCapture(true);
+      // Compress image to under 2MB
+      const compressedBlob = await compressImage(capturePreviewBlob, 2);
+      // Generate UUID v4 filename
+      const fileName = `${uuidv4()}.png`;
       
-      {/* Hidden Webcam */}
-      <Webcam ref={webcamRef} className="ai-capture-webcam" width={640} height={480} />
+      // Create image data object for preview screen
+      const imageData = {
+        url: previewUrl || URL.createObjectURL(compressedBlob),
+        blob: compressedBlob,
+        metadata: {
+          id: uuidv4(),
+          frameId: '',
+          capturedAt: new Date().toISOString(),
+          width: frameDimensions.width,
+          height: frameDimensions.height,
+          size: compressedBlob.size,
+          fileName: fileName,
+        },
+      };
 
-      {/* Main Display + Overlays */}
-      <div className="ai-capture-stage">
-        <canvas
-          ref={canvasRef}
-          width={640}
-          height={480}
-          className="ai-capture-canvas"
-        ></canvas>
+      // Preview screen will handle upload and QR code display
+      // Just mark it as visible
+    } catch (error) {
+      console.error('Failed to process image:', error);
+      setCaptureError('Failed to process image. Please try again.');
+    } finally {
+      setIsProcessingCapture(false);
+    }
+  };
 
-        {/* COUNTDOWN OVERLAY */}
-        {timer > 0 && (
-          <div className="ai-capture-countdown">
-            {timer}
+  const handleRetakeCapture = (): void => {
+    setShowCapturePreview(false);
+    setCapturePreviewBlob(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+  };
+
+  return (
+    <div className="capture-screen">
+      {/* Header with Back Button and Title */}
+      <header className="capture-header">
+        <button
+          className="btn-icon btn-back"
+          onClick={onBack}
+          aria-label="Go back to selection"
+        >
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <h1 className="capture-title">AI Background</h1>
+          <p className="ai-capture-subtitle">SELECT FRAME</p>
+        </div>
+        <div className="btn-icon-spacer"></div>
+      </header>
+
+      <main className="capture-main">
+        {/* Controls at the top */}
+        <div className="control-panel-vertical">
+          {/* Circular Capture Button */}
+          <button
+            onClick={startPhotoProcess}
+            disabled={timer > 0 || isProcessingCapture}
+            className="btn-capture-circle"
+            aria-label="Take photo"
+          >
+            <div className="capture-ring"></div>
+          </button>
+
+          {/* Timer Dropdown Selector */}
+          <div ref={dropdownRef} className="timer-dropdown-container">
+            <button
+              onClick={() => setIsCountdownDropdownOpen(!isCountdownDropdownOpen)}
+              disabled={timer > 0 || isProcessingCapture}
+              className="timer-dropdown-btn"
+              aria-label="Select timer"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="13" r="8"></circle>
+                <path d="M12 9v4l2 2"></path>
+                <path d="M16 2l-4 4M8 2l4 4"></path>
+              </svg>
+              <span>{selectedCountdown}s</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points={isCountdownDropdownOpen ? "18 15 12 9 6 15" : "6 9 12 15 18 9"}></polyline>
+              </svg>
+            </button>
+
+            {/* Dropdown Menu */}
+            {isCountdownDropdownOpen && (
+              <div className="timer-dropdown-menu">
+                {[5, 10, 15, 20, 25, 30].map((seconds) => (
+                  <button
+                    key={seconds}
+                    onClick={() => {
+                      setSelectedCountdown(seconds);
+                      setIsCountdownDropdownOpen(false);
+                    }}
+                    className={`timer-dropdown-option ${selectedCountdown === seconds ? 'selected' : ''}`}
+                  >
+                    {seconds} seconds
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* Camera Preview in the middle */}
+        <div className="preview-container-wrapper">
+          <div className="preview-inner-container" style={{ aspectRatio: `${frameDimensions.width} / ${frameDimensions.height}` }}>
+            {/* Hidden Webcam */}
+            <Webcam ref={webcamRef} style={{ display: 'none' }} width={frameDimensions.width} height={frameDimensions.height} />
+
+            {/* Main Display Canvas */}
+            <canvas
+              ref={canvasRef}
+              width={frameDimensions.width}
+              height={frameDimensions.height}
+              className="camera-preview-canvas"
+            ></canvas>
+
+            {/* COUNTDOWN OVERLAY */}
+            {timer > 0 && (
+              <div className="countdown-overlay">
+                <div className="countdown-number">{timer}</div>
+              </div>
+            )}
+
+            {/* FLASH OVERLAY */}
+            {isFlashing && (
+              <div>
+                <div className="flash-effect"></div>
+                {/* Processing Info Overlay on White Screen - Centered */}
+                <div className="flash-info-overlay">
+                  {/* Animated Spinner Circle */}
+                  <div className="spinner-container">
+                    {/* Outer rotating ring */}
+                    <div className="spinner-ring"/>
+                    {/* Inner pulse circle */}
+                    <div className="spinner-pulse"/>
+                  </div>
+                  {/* Processing Text */}
+                  <div className="flash-processing-text">
+                    Processing...
+                  </div>
+                  {/* Subtext */}
+                  <div className="flash-processing-subtext">
+                    Creating AI Background Mask
+                  </div>
+                  {/* Animated dots */}
+                  <div className="animated-dots-container">
+                    {[0, 1, 2].map((index) => (
+                      <div
+                        key={index}
+                        className="animated-dot"
+                        style={{ animationDelay: `${index * 0.2}s` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PROCESSING OVERLAY - Image Mask Processing */}
+            {isProcessingCapture && (
+              <div className="processing-overlay">
+                <div className="processing-content">
+                  {/* Spinner Animation */}
+                  <div className="spinner"/>
+                  {/* Processing Text */}
+                  <div className="processing-text">
+                    Processing...
+                  </div>
+                  {/* Subtext */}
+                  <div className="processing-subtext">
+                    Creating AI Background Mask
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Frame Selector at the bottom */}
+        <section className="frame-selector-section capture-main-section">
+          <div className="frame-selector-scroll">
+            {backgroundList.map((bg) => (
+              <button
+                key={bg}
+                onClick={() => loadBackground(bg)}
+                className={`frame-option ${
+                  activeBackgroundName === bg ? 'selected' : ''
+                }`}
+                aria-label={`Select frame ${bg.split('/').pop()}`}
+              >
+                <img
+                  src={bg}
+                  alt={bg.split('/').pop() || 'Frame'}
+                  className="frame-thumbnail"
+                />
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* Status Messages */}
+        {processingTimeMs !== null && (
+          <p className="ai-capture-processing">Processed in {(processingTimeMs / 1000).toFixed(2)}s</p>
         )}
+        {captureError && <p className="ai-capture-error">{captureError}</p>}
 
-        {/* FLASH OVERLAY */}
-        {isFlashing && (
-          <div className="ai-capture-flash"></div>
-        )}
-      </div>
-
-      {/* Background Selector Gallery */}
-      <div className="ai-capture-gallery">
-        {backgroundList.map((bg) => (
-          <img 
-            key={bg}
-            src={bg} 
-            alt={bg.split('/').pop() || 'Background'}
-            onClick={() => loadBackground(bg)}
-            className={
-              activeBackgroundName === bg
-                ? 'ai-capture-thumb selected'
-                : 'ai-capture-thumb'
-            }
-            onMouseOver={(e) => (e.target as HTMLImageElement).style.transform = 'scale(1.1)'}
-            onMouseOut={(e) => (e.target as HTMLImageElement).style.transform = 'scale(1.0)'}
-          />
-        ))}
-      </div>
-
-      <div className="ai-capture-actions">
-      <button 
-        onClick={startPhotoProcess} 
-        disabled={timer > 0 || isProcessingCapture} // Disable while counting down or processing
-        className="ai-capture-button"
-      >
-        {timer > 0 ? 'Get Ready...' : isProcessingCapture ? 'Processing...' : 'SNAP!'}
-      </button>
+        {/* Capture Preview Overlay - Using Common PreviewScreen */}
+        <PreviewScreen
+          imageData={capturePreviewBlob ? {
+            url: previewUrl || '',
+            blob: capturePreviewBlob,
+            metadata: {
+              id: uuidv4(),
+              frameId: '',
+              capturedAt: new Date().toISOString(),
+              width: frameDimensions.width,
+              height: frameDimensions.height,
+              size: capturePreviewBlob.size,
+              fileName: `${uuidv4()}.png`,
+            },
+          } : null}
+          isVisible={showCapturePreview}
+          isLoading={isProcessingCapture}
+          onRetake={handleRetakeCapture}
+          onContinue={() => {
+            // Preview screen handles upload and QR code
+          }}
+          showAsOverlay={true}
+        />
+      </main>
     </div>
-
-      <p className="ai-capture-hint">Click an image above to change the scenery.</p>
-      {processingTimeMs !== null && (
-        <p className="ai-capture-processing">Processed in {(processingTimeMs / 1000).toFixed(2)}s</p>
-      )}
-      {captureError && <p className="ai-capture-error">{captureError}</p>}
-      </div>
-    </>
   );
 }
 

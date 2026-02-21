@@ -314,10 +314,10 @@ function App(): ReactElement {
         return capturedImageData ? (
           <PreviewScreen
             imageData={capturedImageData}
+            isVisible={true}
+            showAsOverlay={true}
             onRetake={handleBackFromPreview}
-            onSave={handleSave}
-            onPrint={handlePrint}
-            onShare={handleShare}
+            onContinue={handleBackToWelcome}
             isLoading={isProcessing}
           />
         ) : (

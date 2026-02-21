@@ -52,13 +52,23 @@ export const CAMERA_CONFIG = {
   SCROLL_SPEED_MULTIPLIER: 2, // Right-click drag speed multiplier
 } as const;
 
-export const FILTER_PRESETS = [
-  { id: 'none', name: 'Original', class: '' },
-  { id: 'sepia', name: 'Vintage', class: 'sepia(1)' },
-  { id: 'grayscale', name: 'B&W', class: 'grayscale(1)' },
-  { id: 'vivid', name: 'Vivid', class: 'saturate(2) contrast(1.1)' },
-  { id: 'cool', name: 'Ice', class: 'hue-rotate(180deg) saturate(1.5)' },
-] as const;
+// ========== 3.0 API_CONFIG - IMAGE UPLOAD & QR CODE GENERATION ==========
+export const API_CONFIG = {
+  // Use proxy in development, direct URL in production
+  UPLOAD_URL: import.meta.env.DEV 
+    ? "/api/zooimage/upload.php" 
+    : "https://svsinfotech.in/zooimage/upload.php",
+  
+  // Base URL for accessing uploaded images
+  UPLOADS_BASE_URL: "https://svsinfotech.in/zooimage/uploads/",
+  
+  // Upload constraints
+  MAX_FILE_SIZE_MB: 10,
+  ALLOWED_FORMATS: ['image/jpeg', 'image/png', 'image/webp'],
+  
+  // Timeout for upload request (ms)
+  UPLOAD_TIMEOUT_MS: 30000,
+} as const;
 
 export const ERROR_MESSAGES = {
   CAMERA_PERMISSION_DENIED: 'Camera permission was denied. Please enable camera access in your browser settings.',
