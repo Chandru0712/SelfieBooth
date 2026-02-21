@@ -13,7 +13,7 @@
   flex-direction: column;
   height: 100vh;
   width: 100vw;
-  background: var(--background);
+  background: var(--background, #020617);
   gap: 0;
   overflow: hidden;
   position: relative;

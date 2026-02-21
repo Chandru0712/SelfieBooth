@@ -446,7 +446,7 @@ export const CaptureScreen = ({
       {/* SECTION 1: Top Header */}
       <div className="layout-header">
         <button className="back-circle-btn" onClick={onBack}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <svg width="75" height="75" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>

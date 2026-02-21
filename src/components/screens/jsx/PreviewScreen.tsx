@@ -18,7 +18,7 @@ import { useState, useRef, useEffect } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { ImageData } from '../../../types';
 import { uploadImageAndGenerateQR, downloadImageFromUrl } from '../../../utils/apiService.ts';
-import '../styles/screens.css';
+import '../styles/PreviewScreen.css';
 
 interface PreviewScreenProps {
   imageData: ImageData | null;
@@ -101,12 +101,6 @@ export const PreviewScreen = ({
       setError('Failed to upload image. Please try again.');
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const handleDone = () => {
-    if (onContinue) {
-      onContinue(imageData);
     }
   };
 
@@ -197,167 +191,63 @@ export const PreviewScreen = ({
     // Overlay mode - upload screen with QR code
     return (
       <div className="capture-preview-overlay">
-        {/* Upload in progress */}
-        {isProcessing && (
-          <div className="capture-preview-image-container">
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              gap: '20px'
-            }}>
-              <div className="spinner" />
-              <p style={{ color: '#fff', fontSize: '16px' }}>Uploading & Generating QR Code...</p>
-            </div>
-          </div>
-        )}
+        {/* Top Header */}
+        <div className="layout-header">
+          <div className="header-spacer" />
+          <h1 className="category-title">Preview</h1>
+          <div className="header-spacer" /> 
+        </div>
 
-        {/* Upload complete - show image + QR code */}
-        {!isProcessing && uploadedImageUrl && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
-            {/* Top Bar: Actions & QR */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-start',
-              alignItems: 'center',
-              gap: '30px',
-              padding: '20px',
-              background: 'rgba(0,0,0,0.4)',
-              zIndex: 10
-            }}>
-              {/* QR Code Block */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ color: '#00f2ff', fontWeight: 'bold', margin: 0, fontSize: '18px' }}>✅ Upload Successful!</p>
-                  <p style={{ color: '#fff', margin: '5px 0 0 0', fontSize: '14px' }}>Scan to download</p>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
-                  <div
-                    ref={qrRef}
-                    style={{
-                      background: 'white',
-                      padding: '8px',
-                      borderRadius: '8px',
-                      boxShadow: '0 0 15px rgba(0, 242, 255, 0.4)'
-                    }}
-                  >
-                    <QRCodeCanvas
-                      value={uploadedImageUrl}
-                      size={500}
-                      level="H"
-                      includeMargin={true}
-                    />
-                  </div>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={handleRetake}
-                    disabled={isProcessing}
-                    style={{ borderRadius: '30px', padding: '12px 30px', width: '100%' }}
-                  >
-                    ↻ Retake
-                  </button>
+        {/* Main Interface -> Keep image fixed in background, action panel fixed at bottom */}
+        <div className="flex-col-full main-interface-container">
+          
+          {/* Always show the preview image spanning the available height */}
+          <div className="preview-image-wrapper image-bounds-padding-top">
+            <img
+              ref={imgRef}
+              src={uploadedImageUrl || imageData.url}
+              alt="Captured preview"
+              className="preview-image-inner"
+            />
+            
+            {/* Bottom QR Code (Only visible after successful upload, no text or retake button) */}
+            {uploadedImageUrl && !isProcessing && (
+              <div className="qr-bottom-container">
+                <div className="qr-canvas-wrapper large qr-padded" ref={qrRef}>
+                  <QRCodeCanvas
+                    value={uploadedImageUrl}
+                    size={512}
+                    level="H"
+                    includeMargin={true}
+                  />
                 </div>
               </div>
-            </div>
-
-            {/* Bottom: Image */}
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'flex-start',
-              overflow: 'hidden',
-              padding: '10px'
-            }}>
-              <img
-                src={uploadedImageUrl}
-                alt="Uploaded photo"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  objectPosition: 'left top'
-                }}
-              />
-            </div>
+            )}
           </div>
-        )}
 
-        {/* Before upload - show image with upload button */}
-        {!isProcessing && !uploadedImageUrl && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
-            {/* Top Bar: Actions */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              gap: '20px',
-              padding: '20px',
-              background: 'rgba(0,0,0,0.4)',
-              zIndex: 10
-            }}>
-              <button
-                className="btn btn-secondary"
-                onClick={handleRetake}
-                disabled={isProcessing}
-                style={{ borderRadius: '30px', padding: '12px 30px' }}
-              >
-                ↻ Retake
-              </button>
+          {/* Top panel with blur effect containing dynamic actions */}
+          <div className="bottom-blur-panel panel-fixed-top">
+            <button
+              className="btn btn-secondary btn-large-action secondary"
+              onClick={handleRetake}
+              disabled={isProcessing}
+            >
+              ↻ Retake
+            </button>
 
-              <button
-                className="btn btn-primary btn-lg"
-                onClick={handleContinue}
-                disabled={isProcessing}
-                style={{ borderRadius: '30px', boxShadow: '0 0 20px rgba(0,242,255,0.4)', padding: '16px 40px', border: 'none' }}
-              >
-                ✓ Upload & Get QR
-              </button>
-            </div>
-
-            {/* Bottom: Image */}
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'flex-start',
-              overflow: 'hidden',
-              padding: '10px'
-            }}>
-              <img
-                ref={imgRef}
-                src={imageData.url}
-                alt="Captured preview"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  objectPosition: 'left top'
-                }}
-              />
-            </div>
+            <button
+              className="btn btn-primary btn-large-action primary"
+              onClick={handleContinue}
+              disabled={isProcessing || !!uploadedImageUrl}
+            >
+              {isProcessing ? 'Generating QR Code...' : '✓ Click & Get QR'}
+            </button>
           </div>
-        )}
+        </div>
 
         {/* Error Message */}
         {error && (
-          <div
-            style={{
-              position: 'fixed',
-              bottom: '200px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: 'rgba(239, 68, 68, 0.9)',
-              color: 'white',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              fontSize: '14px',
-              zIndex: 2001,
-              maxWidth: '80%',
-            }}
-          >
+          <div className="error-toast">
             {error}
           </div>
         )}
@@ -368,9 +258,11 @@ export const PreviewScreen = ({
   // Regular preview screen mode
   return (
     <div className="preview-screen">
-      {/* Header */}
-      <div className="preview-header">
-        <h2 className="preview-title">Your Photo</h2>
+      {/* Top Header */}
+      <div className="layout-header">
+        <div className="header-spacer" />
+        <h1 className="category-title">Preview</h1>
+        <div className="header-spacer" /> 
       </div>
 
       {/* Main preview area */}
@@ -395,7 +287,7 @@ export const PreviewScreen = ({
       {!uploadedImageUrl && (
         <div className="preview-actions">
           <button
-            className="btn btn-secondary btn-lg"
+            className="btn btn-secondary btn-large-action secondary"
             onClick={handleRetake}
             disabled={isProcessing}
           >
@@ -404,7 +296,7 @@ export const PreviewScreen = ({
 
           <div className="export-menu-wrapper">
             <button
-              className="btn btn-primary btn-lg"
+              className="btn btn-primary btn-large-action primary"
               onClick={handleContinue}
               disabled={isProcessing}
             >
@@ -445,35 +337,27 @@ export const PreviewScreen = ({
 
       {/* Error message */}
       {error && (
-        <div className="preview-info" style={{ color: '#ef4444' }} aria-live="polite">
+        <div className="preview-info error-text" aria-live="polite">
           <p className="info-text">⚠️ {error}</p>
         </div>
       )}
 
       {/* Photo info */}
       {uploadedImageUrl && (
-        <div style={{
-          marginTop: '20px',
-          padding: '20px',
-          background: 'rgba(0,242,255,0.1)',
-          borderRadius: '8px',
-          border: '1px solid rgba(0,242,255,0.3)',
-          textAlign: 'center'
-        }}>
-          <p style={{ color: '#00f2ff', fontWeight: 'bold', marginBottom: '15px' }}>✅ Upload Successful!</p>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
-            <div ref={qrRef} style={{ display: 'inline-block', background: 'white', padding: '10px', borderRadius: '8px' }}>
-              <QRCodeCanvas value={uploadedImageUrl} size={150} level="H" includeMargin={true} />
+        <div className="upload-success-panel">
+          <p className="success-title">✅ Upload Successful!</p>
+          <div className="qr-controls">
+            <div className="qr-canvas-wrapper large" ref={qrRef}>
+              <QRCodeCanvas value={uploadedImageUrl} size={250} level="H" includeMargin={true} />
             </div>
             <button
               onClick={handleRetake}
-              className="btn btn-secondary"
-              style={{ width: '100%', maxWidth: '170px' }}
+              className="btn btn-secondary btn-retake-medium"
             >
               ↻ Retake
             </button>
           </div>
-          <div style={{ marginTop: '20px', display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div className="panel-actions">
             <button
               onClick={handlePrint}
               className="btn btn-secondary"
@@ -490,15 +374,7 @@ export const PreviewScreen = ({
 
             <button
               onClick={downloadQRCode}
-              style={{
-                padding: '12px 24px',
-                background: '#4ade80',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontWeight: 'bold'
-              }}
+              className="btn-qr-download"
             >
               📥 Download QR
             </button>

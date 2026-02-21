@@ -27,19 +27,19 @@ interface SelectionScreenProps {
 const CATEGORIES: Category[] = [
   {
     id: 'children',
-    name: 'Kids Fun',
+    name: 'Children',
     description: 'Playful and colorful frames',
     emoji: '🎨',
   },
   {
     id: 'adult',
-    name: 'Elegant',
+    name: 'Adult',
     description: 'Sophisticated and professional',
     emoji: '✨',
   },
   {
     id: 'proverb',
-    name: 'Wisdom',
+    name: 'Proverb',
     description: 'Thoughtful and inspiring',
     emoji: '🌟',
   },
@@ -50,8 +50,8 @@ const CATEGORIES: Category[] = [
     emoji: '🎭',
   },
   {
-    id: 'ai',
-    name: 'AI Image',
+    id: 'blend',
+    name: 'Blend',
     description: 'Generate with artificial intelligence',
     emoji: '🤖',
   },

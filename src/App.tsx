@@ -133,7 +133,7 @@ function App(): ReactElement {
    */
   const handleSelectCategory = (category: string): void => {
     setSelectedCategory(category);
-    if (category === 'ai') {
+    if (category === 'blend') {
       setCurrentScreen(SCREENS.AI_IMAGE);
     } else {
       setCurrentScreen(SCREENS.CAPTURE);
