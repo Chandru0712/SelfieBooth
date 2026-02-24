@@ -23,7 +23,7 @@
  * ================================================================================
  */
 
-import { useState, useEffect, ReactElement } from 'react';
+import { useState, useEffect, useRef, ReactElement } from 'react';
 import './App.css';
 
 // ========== 1.0 IMPORTS - SCREENS ==========
@@ -43,10 +43,10 @@ import type { ImageData, Frame } from './types';
 
 // ========== 1.3 IMPORTS - DYNAMIC ASSETS ==========
 // Dynamically import frames
-const childrenFramesRaw = import.meta.glob('./assets/Frames/Children/*.png', { eager: true, query: '?url' });
-const adultFramesRaw = import.meta.glob('./assets/Frames/Adult/*.png', { eager: true, query: '?url' });
-const proverbFramesRaw = import.meta.glob('./assets/Frames/Proverb/*.png', { eager: true, query: '?url' });
-const collageFramesRaw = import.meta.glob('./assets/Frames/Collage/*.png', { eager: true, query: '?url' });
+const childrenFramesRaw = import.meta.glob('./assets/Frames/Children/*.{png,webp}', { eager: true, query: '?url' });
+const adultFramesRaw = import.meta.glob('./assets/Frames/Adult/*.{png,webp}', { eager: true, query: '?url' });
+const proverbFramesRaw = import.meta.glob('./assets/Frames/Proverb/*.{png,webp}', { eager: true, query: '?url' });
+const collageFramesRaw = import.meta.glob('./assets/Frames/Collage/*.{png,webp}', { eager: true, query: '?url' });
 // ========== 2.0 FRAME DATA LOADING & FORMATTING ==========
 
 /**
@@ -96,6 +96,11 @@ function App(): ReactElement {
 
   // Hooks
   const session = useSession();
+
+  // ========== INACTIVITY TIMER ==========
+  // 30 minutes in milliseconds
+  const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
    * Load frames when category changes
@@ -219,6 +224,51 @@ function App(): ReactElement {
     session.endSession();
     setCapturedImageData(null);
   };
+
+  /**
+   * Inactivity auto-reset: listen for ANY user activity.
+   * If no activity for 30 minutes, go back to welcome.
+   * Only active when the user is NOT already on the welcome screen.
+   */
+  useEffect(() => {
+    // Don't run timer on the welcome screen itself
+    if (currentScreen === SCREENS.WELCOME) {
+      // Clear any lingering timer when we arrive at welcome
+      if (inactivityTimer.current) {
+        clearTimeout(inactivityTimer.current);
+        inactivityTimer.current = null;
+      }
+      return;
+    }
+
+    const resetTimer = () => {
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      inactivityTimer.current = setTimeout(() => {
+        console.log('⏰ Inactivity timeout — returning to Welcome screen');
+        handleBackToWelcome();
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    // Events that count as user activity
+    const ACTIVITY_EVENTS = [
+      'mousemove',
+      'mousedown',
+      'keydown',
+      'touchstart',
+      'click',
+      'scroll',
+    ] as const;
+
+    // Start the timer immediately and reset on every activity event
+    resetTimer();
+    ACTIVITY_EVENTS.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    return () => {
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      ACTIVITY_EVENTS.forEach(evt => window.removeEventListener(evt, resetTimer));
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentScreen]);
 
   /**
    * Navigation helpers

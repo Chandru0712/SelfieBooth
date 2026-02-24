@@ -16,7 +16,23 @@
  */
 
 import { useEffect, useState } from 'react';
+import bg1 from '../../../assets/Welcome-01-4k.webp';
+import bg2 from '../../../assets/Welcome-02-4k.webp';
+
 import '../styles/screens.css';
+
+// ---- Add or remove images from this list to change the pool ----
+const BACKGROUND_IMAGES = [bg1, bg2];
+
+/**
+ * Pick a background image ONCE at app startup — randomly.
+ * - Each kiosk independently picks a different random image on launch.
+ * - Same image is locked in for the whole session (no change on auto-reset or remount).
+ * - Only changes when the app/browser is fully restarted.
+ */
+const SESSION_BACKGROUND: string =
+  BACKGROUND_IMAGES[Math.floor(Math.random() * BACKGROUND_IMAGES.length)];
+
 
 interface WelcomeScreenProps {
   onStart?: () => void;
@@ -27,6 +43,8 @@ export const WelcomeScreen = ({ onStart = () => {} }: WelcomeScreenProps) => {
   // ========== 2.0 STATE MANAGEMENT & LIFECYCLE ==========
   const [isAnimating, setIsAnimating] = useState(false);
   const [isRequestingCamera, setIsRequestingCamera] = useState(false);
+  // Background is fixed for the whole session — no re-pick on remount
+  const currentBg = SESSION_BACKGROUND;
 
   // ========== 3.0 CAMERA PRE-REQUEST (BACKGROUND) ==========
   useEffect(() => {
@@ -67,7 +85,12 @@ export const WelcomeScreen = ({ onStart = () => {} }: WelcomeScreenProps) => {
   // ========== 4.0 JSX / RENDER ==========
   return (
     <div className="welcome-screen" onClick={onStart}>
-      {/* Background gradient */}
+      {/* Random background image */}
+      <div
+        className="welcome-bg-image"
+        style={{ backgroundImage: `url(${currentBg})` }}
+      />
+      {/* Background gradient overlay */}
       <div className="welcome-bg-gradient" />
 
       {/* Main content container */}

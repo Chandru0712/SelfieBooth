@@ -5,19 +5,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Roboto&display=swap");
 
 
-
-
-/**
- * ========================================
- * SCREENS.CSS - Component Styles
- * ========================================
- * Implements Advanced Dark Theme using variables from index.css
- */
-
-/* ==================== WELCOME SCREEN ==================== */
-
-/* ==================== WELCOME SCREEN ==================== */
-
 /* ==================== WELCOME SCREEN ==================== */
 
 .welcome-screen {
@@ -38,23 +25,23 @@
   background: var(--background, #020617);
 }
 
-.welcome-screen::before {
-  content: "";
+
+.welcome-bg-image {
   position: absolute;
-  inset: -20px; /* Slight bleed to prevent crisp edges from blurring */
-  background-image:url(../../../assets/selfiebooth_4k_2160x3840.png);
+  inset: 0;
   background-position: center;
-  background-size: contain;
+  background-size: cover;
   background-repeat: no-repeat;
-  background-attachment: fixed;
-  opacity: 0.5; /* Adjust visibility of image to blend with background */
+  opacity: 1;
   z-index: -2;
+  transition: background-image 0.5s ease;
 }
+
 
 .welcome-bg-gradient {
   position: absolute;
   inset: 0;
-  backdrop-filter: blur(2px);
+  /* backdrop-filter: blur(2px); */
   z-index: -1;
 }
 
@@ -214,7 +201,7 @@
   justify-content: space-between;
   height: 100vh;
   width: 100vw;
-  background-image:url(../../../assets/Tiger.jpg);
+  background-image:url(../../../assets/Tiger.webp);
   background-position: center;
   background-size: contain;
   background-repeat: no-repeat;
@@ -229,7 +216,7 @@
 .selection-bg-gradient {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 10%, rgba(2, 6, 23, 0.4) 0%, rgba(2, 6, 23, 0.9) 100%);
+  /* background: radial-gradient(circle at 50% 10%, rgba(2, 6, 23, 0.4) 0%, rgba(2, 6, 23, 0.9) 100%); */
   z-index: 0;
   pointer-events: none;
 }
@@ -238,8 +225,8 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6); /* Overlay for readability */
-  backdrop-filter: blur(1px);
+  /* background: rgba(0, 0, 0, 0.6); Overlay for readability */
+  /* backdrop-filter: blur(3px); */
   opacity: 1;
   z-index: 0;
 }
@@ -425,13 +412,13 @@
 }
 
 .category-title {
-  color: var(--primary, #00f2ff);
-  font-family: 'Righteous', sans-serif;
+  /* color: var(--primary, #580351); */
+  font-family: 'Arial', sans-serif;
   text-transform: uppercase;
   letter-spacing: 2px;
   font-size: 10rem;
   margin: 0;
-  text-shadow: 0 0 12px var(--primary-glow, rgba(0,242,255,0.4));
+  /* text-shadow: 0 0 12px var(--primary-glow, rgba(111, 0, 255, 0.4)); */
 }
 
 /* Control Panel Section */

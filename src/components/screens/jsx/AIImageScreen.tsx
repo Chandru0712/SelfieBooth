@@ -625,7 +625,7 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <h1 className="category-title">AI Background</h1>
+        <h1 className="category-title">Creativity Zone</h1>
         <div style={{ width: 44 }} /> 
       </div>
 
