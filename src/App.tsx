@@ -300,7 +300,7 @@ function App(): ReactElement {
 
   // ========== 7.0 JSX RETURN ==========
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#050d1a] text-[#e2e8f0] font-[Outfit]">
+    <div className="relative w-screen h-screen overflow-hidden bg-[#0c0812] text-[#f0e6ff] font-[Outfit]">
       {/* Error boundary handled by main.tsx */}
       {renderScreen()}
     </div>

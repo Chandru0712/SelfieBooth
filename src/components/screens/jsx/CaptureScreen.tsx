@@ -284,19 +284,19 @@ export const CaptureScreen = ({
   }, [showTimerPopup, showZoomPopup]);
 
   return (
-    <div className="flex flex-col w-screen h-screen bg-[#050d1a] overflow-hidden">
+    <div className="flex flex-col w-screen h-screen bg-[#0c0812] overflow-hidden">
 
       {/* ── HEADER ── */}
-      <div className="flex items-center justify-between px-8 py-5 bg-gradient-to-r from-[rgba(0,100,255,0.10)] to-[rgba(0,40,120,0.14)] border-b border-[rgba(56,139,253,0.18)] shrink-0">
+      <div className="flex items-center justify-between px-8 py-5 bg-gradient-to-r from-[rgba(120,40,200,0.12)] to-[rgba(60,0,120,0.16)] border-b border-[rgba(168,85,247,0.20)] shrink-0">
         <button
-          className="w-[125px] h-[125px] rounded-full flex items-center justify-center text-[#e2e8f0] bg-[rgba(10,30,80,0.5)] border-2 border-[rgba(56,139,253,0.3)] transition-all duration-300 hover:bg-[rgba(56,139,253,0.2)] hover:text-white"
+          className="w-[125px] h-[125px] rounded-full flex items-center justify-center text-[#f0e6ff] bg-[rgba(60,0,120,0.5)] border-2 border-[rgba(168,85,247,0.35)] transition-all duration-300 hover:bg-[rgba(168,85,247,0.22)] hover:text-white"
           onClick={onBack}
         >
           <svg width="75" height="75" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <h1 className="font-[Arial] text-[10rem] uppercase tracking-[2px] text-[#e2e8f0] m-0">{category}</h1>
+        <h1 className="font-[Arial] text-[10rem] uppercase tracking-[2px] text-[#f0e6ff] m-0">{category}</h1>
         <div style={{ width: 44 }} />
       </div>
 
@@ -305,17 +305,17 @@ export const CaptureScreen = ({
         {/* Timer */}
         <div className="relative" ref={timerWrapperRef}>
           <button
-            className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[rgba(56,139,253,0.5)] bg-[rgba(10,22,40,0.6)] text-[#e2e8f0] font-black transition-all duration-300 hover:bg-[rgba(56,139,253,0.15)] hover:text-white"
-            style={{ boxShadow: '0 0 8px rgba(56,139,253,0.15)' }}
+            className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[rgba(168,85,247,0.55)] bg-[rgba(19,13,30,0.6)] text-[#f0e6ff] font-black transition-all duration-300 hover:bg-[rgba(168,85,247,0.18)] hover:text-white"
+            style={{ boxShadow: '0 0 8px rgba(168,85,247,0.18)' }}
             onClick={() => setShowTimerPopup(!showTimerPopup)}
           >
-            <small className="text-[1.1rem] text-[#94a3b8] uppercase tracking-widest">TIMER</small>
+            <small className="text-[1.1rem] text-[#b8a4d4] uppercase tracking-widest">TIMER</small>
             <strong className="text-[2rem]">{timerDuration}s</strong>
           </button>
           {showTimerPopup && (
-            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#3b82f6] bg-[rgba(10,22,40,0.97)]" style={{ boxShadow: '0 8px 32px rgba(59,130,246,0.18)' }}>
+            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)]" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
               {[0, 5, 10, 15, 20, 25, 30].map(v => (
-                <button key={v} className={`w-full py-4 text-center text-[1.5rem] font-semibold border-none transition-all duration-200 ${timerDuration === v ? 'bg-[rgba(59,130,246,0.12)] text-white' : 'text-[#3b82f6] hover:bg-[rgba(59,130,246,0.12)] hover:text-white'}`}
+                <button key={v} className={`w-full py-4 text-center text-[1.5rem] font-semibold border-none transition-all duration-200 ${timerDuration === v ? 'bg-[rgba(168,85,247,0.15)] text-white' : 'text-[#a855f7] hover:bg-[rgba(168,85,247,0.15)] hover:text-white'}`}
                   onClick={() => { setTimerDuration(v); setShowTimerPopup(false); }}>
                   {v === 0 ? "Off" : `${v}s`}
                 </button>
@@ -328,30 +328,30 @@ export const CaptureScreen = ({
         <button
           className="w-[150px] h-[150px] rounded-full p-[5px] transition-all duration-300 disabled:opacity-50 active:scale-[0.96]"
           style={{
-            border: '4px solid #3b82f6',
-            background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-            boxShadow: '0 0 24px rgba(59,130,246,0.35)',
+            border: '4px solid #a855f7',
+            background: 'linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)',
+            boxShadow: '0 0 28px rgba(168,85,247,0.45)',
           }}
           onClick={handleCaptureClick}
           disabled={isCapturing || isProcessing || !isInitialized}
         >
-          <div className="w-full h-full rounded-full" style={{ background: 'linear-gradient(135deg, #0f2240 0%, #0a1628 100%)', boxShadow: '0 0 24px rgba(59,130,246,0.4), inset 0 0 12px rgba(59,130,246,0.1)' }} />
+          <div className="w-full h-full rounded-full" style={{ background: 'linear-gradient(135deg, #1e1430 0%, #130d1e 100%)', boxShadow: '0 0 24px rgba(168,85,247,0.45), inset 0 0 12px rgba(168,85,247,0.12)' }} />
         </button>
 
         {/* Zoom */}
         <div className="relative" ref={zoomWrapperRef}>
           <button
-            className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[rgba(56,139,253,0.5)] bg-[rgba(10,22,40,0.6)] text-[#e2e8f0] font-black transition-all duration-300 hover:bg-[rgba(56,139,253,0.15)] hover:text-white"
-            style={{ boxShadow: '0 0 8px rgba(56,139,253,0.15)' }}
+            className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[rgba(168,85,247,0.55)] bg-[rgba(19,13,30,0.6)] text-[#f0e6ff] font-black transition-all duration-300 hover:bg-[rgba(168,85,247,0.18)] hover:text-white"
+            style={{ boxShadow: '0 0 8px rgba(168,85,247,0.18)' }}
             onClick={() => setShowZoomPopup(!showZoomPopup)}
           >
-            <small className="text-[1.1rem] text-[#94a3b8] uppercase tracking-widest">ZOOM</small>
+            <small className="text-[1.1rem] text-[#b8a4d4] uppercase tracking-widest">ZOOM</small>
             <strong className="text-[2rem]">{zoomLevel}x</strong>
           </button>
           {showZoomPopup && (
-            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#3b82f6] bg-[rgba(10,22,40,0.97)]" style={{ boxShadow: '0 8px 32px rgba(59,130,246,0.18)' }}>
+            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)]" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
               {ZOOM_OPTIONS.map(v => (
-                <button key={v} className={`w-full py-4 text-center text-[1.5rem] font-semibold border-none transition-all duration-200 ${zoomLevel === v ? 'bg-[rgba(59,130,246,0.12)] text-white' : 'text-[#3b82f6] hover:bg-[rgba(59,130,246,0.12)] hover:text-white'}`}
+                <button key={v} className={`w-full py-4 text-center text-[1.5rem] font-semibold border-none transition-all duration-200 ${zoomLevel === v ? 'bg-[rgba(168,85,247,0.15)] text-white' : 'text-[#a855f7] hover:bg-[rgba(168,85,247,0.15)] hover:text-white'}`}
                   onClick={() => { setZoomLevel(v); setShowZoomPopup(false); }}>
                   {v}x
                 </button>

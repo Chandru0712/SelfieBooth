@@ -5,25 +5,27 @@
 
 /* ============================================================
    TAILWIND V4 — CSS-FIRST THEME CONFIGURATION
+   New Dark Theme: Deep Obsidian + Violet + Neon Magenta
    ============================================================ */
 @theme {
-  /* Dark Blue Palette */
-  --color-bg-base:        #050d1a;
-  --color-surface:        #0a1628;
-  --color-surface-light:  #0f2240;
-  --color-border:         rgba(56,139,253,0.18);
-  --color-glass-bg:       rgba(10,22,40,0.75);
-  --color-glass-border:   rgba(56,139,253,0.15);
-  --color-overlay:        rgba(5,13,26,0.88);
+  /* Deep Obsidian/Purple Palette */
+  --color-bg-base:        #0c0812;
+  --color-surface:        #130d1e;
+  --color-surface-light:  #1e1430;
+  --color-border:         rgba(168,85,247,0.20);
+  --color-glass-bg:       rgba(19,13,30,0.80);
+  --color-glass-border:   rgba(168,85,247,0.18);
+  --color-overlay:        rgba(12,8,18,0.92);
 
-  --color-text-primary:   #e2e8f0;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted:     #4a6080;
+  --color-text-primary:   #f0e6ff;
+  --color-text-secondary: #b8a4d4;
+  --color-text-muted:     #5e4880;
 
-  --color-accent:         #3b82f6;
-  --color-accent-glow:    rgba(59,130,246,0.35);
-  --color-cyan:           #00f2ff;
-  --color-cyan-glow:      rgba(0,242,255,0.35);
+  /* Neon accent: violet + magenta */
+  --color-accent:         #a855f7;
+  --color-accent-glow:    rgba(168,85,247,0.40);
+  --color-cyan:           #e040fb;
+  --color-cyan-glow:      rgba(224,64,251,0.40);
 
   /* Font */
   --font-family-sans: 'Outfit', 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
@@ -37,9 +39,9 @@
   --radius-xl:   32px;
 
   /* Shadows */
-  --shadow-sm: 0 4px 6px -1px rgba(0,10,30,0.5);
-  --shadow-md: 0 10px 15px -3px rgba(0,10,30,0.6);
-  --shadow-lg: 0 20px 25px -5px rgba(0,10,30,0.7);
+  --shadow-sm: 0 4px 6px -1px rgba(0,0,15,0.5);
+  --shadow-md: 0 10px 15px -3px rgba(0,0,15,0.6);
+  --shadow-lg: 0 20px 25px -5px rgba(0,0,15,0.7);
 
   /* Animation */
   --ease-smooth: cubic-bezier(0.4,0,0.2,1);
@@ -115,9 +117,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
   50% { transform: translateY(-12px); }
 }
 @keyframes pulse-glow-subtle {
-  0%   { box-shadow: 0 0 15px rgba(0,242,255,0.05); border-color: rgba(0,242,255,0.3); }
-  50%  { box-shadow: 0 0 25px rgba(0,242,255,0.2);  border-color: rgba(0,242,255,0.6); }
-  100% { box-shadow: 0 0 15px rgba(0,242,255,0.05); border-color: rgba(0,242,255,0.3); }
+  0%   { box-shadow: 0 0 15px rgba(224,64,251,0.06); border-color: rgba(224,64,251,0.28); }
+  50%  { box-shadow: 0 0 28px rgba(224,64,251,0.22); border-color: rgba(224,64,251,0.65); }
+  100% { box-shadow: 0 0 15px rgba(224,64,251,0.06); border-color: rgba(224,64,251,0.28); }
 }
 @keyframes countdownZoomFade {
   0%   { transform: translate(-50%,-50%) scale(0.5); opacity: 0; }
@@ -148,9 +150,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
   from { transform: translateX(-100%); }
   to   { transform: translateX(100%); }
 }
+@keyframes aurora-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
 
 /* ============================================================
-   UTILITY CLASSES — things Tailwind doesn't cover out-of-the-box
+   UTILITY CLASSES
    ============================================================ */
 
 /* Glass card */
@@ -172,7 +179,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
   font-size: clamp(150px, 40vw, 400px);
   font-weight: 900;
   color: white;
-  text-shadow: 0 0 60px rgba(0,242,255,1), 0 0 30px rgba(0,0,0,0.8);
+  text-shadow: 0 0 60px rgba(224,64,251,1), 0 0 30px rgba(0,0,0,0.8);
   animation: countdownZoomFade 1s var(--ease-smooth) forwards;
   pointer-events: none;
   z-index: 1000;
@@ -190,8 +197,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
 /* Frame selector selected state glow */
 .frame-item-selected {
-  border-color: #00f2ff !important;
-  box-shadow: 0 0 24px rgba(0,242,255,0.4);
+  border-color: #e040fb !important;
+  box-shadow: 0 0 24px rgba(224,64,251,0.45);
   transform: scale(1.08);
   z-index: 2;
 }
@@ -213,35 +220,35 @@ button:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 .spinner {
   width: 50px;
   height: 50px;
-  border: 4px solid rgba(0,242,255,0.3);
-  border-top-color: #00f2ff;
+  border: 4px solid rgba(224,64,251,0.3);
+  border-top-color: #e040fb;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
 .spinner-ring {
   width: 80px;
   height: 80px;
-  border: 6px solid rgba(0,242,255,0.3);
-  border-top-color: #00f2ff;
+  border: 6px solid rgba(224,64,251,0.3);
+  border-top-color: #e040fb;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
 .spinner-pulse {
   width: 40px;
   height: 40px;
-  background: radial-gradient(circle, #00f2ff, rgba(0,242,255,0.3));
+  background: radial-gradient(circle, #e040fb, rgba(224,64,251,0.3));
   border-radius: 50%;
   animation: pulse-ring 1.5s ease-in-out infinite;
-  box-shadow: 0 0 20px rgba(0,242,255,0.6);
+  box-shadow: 0 0 20px rgba(224,64,251,0.6);
 }
 
 /* Animated dot */
 .animated-dot {
   width: 8px; height: 8px;
-  background: #00f2ff;
+  background: #e040fb;
   border-radius: 50%;
   animation: dot-bounce 1.4s ease-in-out infinite;
-  box-shadow: 0 0 8px rgba(0,242,255,0.8);
+  box-shadow: 0 0 8px rgba(224,64,251,0.8);
 }
 
 /* QR canvas white bg wrapper */
@@ -249,6 +256,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
   background: white;
   padding: 8px;
   border-radius: 8px;
-  box-shadow: 0 0 15px rgba(0,242,255,0.4);
+  box-shadow: 0 0 15px rgba(224,64,251,0.4);
   display: inline-block;
 }

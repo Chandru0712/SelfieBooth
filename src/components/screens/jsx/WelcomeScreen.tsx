@@ -49,7 +49,7 @@ export const WelcomeScreen = ({ onStart = () => {} }: WelcomeScreenProps) => {
       />
 
       {/* Dark gradient overlay for depth */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[rgba(5,13,26,0.55)] via-transparent to-[rgba(5,13,26,0.3)]" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[rgba(12,8,18,0.65)] via-transparent to-[rgba(12,8,18,0.35)]" />
 
       {/* Content — fades + slides in on mount */}
       <div
@@ -76,16 +76,16 @@ export const WelcomeScreen = ({ onStart = () => {} }: WelcomeScreenProps) => {
               flex items-center justify-center gap-8
               px-24 py-10
               rounded-[28px]
-              border border-[rgba(100,160,255,0.35)]
+              border border-[rgba(168,85,247,0.40)]
               transition-all duration-350 ease-out
               hover:scale-105 hover:-translate-y-1
               active:scale-[0.98]
             "
             style={{
-              background: 'rgba(5,13,26,0.35)',
+              background: 'rgba(12,8,18,0.40)',
               backdropFilter: 'blur(20px) saturate(1.6)',
               WebkitBackdropFilter: 'blur(20px) saturate(1.6)',
-              boxShadow: '0 8px 40px rgba(0,30,80,0.45), inset 0 1px 0 rgba(255,255,255,0.10)',
+              boxShadow: '0 8px 40px rgba(100,0,180,0.35), inset 0 1px 0 rgba(255,255,255,0.10)',
             }}
           >
             {/* Bouncing finger icon */}
@@ -98,7 +98,7 @@ export const WelcomeScreen = ({ onStart = () => {} }: WelcomeScreenProps) => {
             {/* Label */}
             <span
               className="text-[54px] font-extrabold tracking-[3px] text-white font-[Pacifico]"
-              style={{ textShadow: '0 0 20px rgba(100,180,255,0.6), 0 2px 8px rgba(0,0,0,0.5)' }}
+              style={{ textShadow: '0 0 24px rgba(224,64,251,0.7), 0 0 8px rgba(168,85,247,0.5), 0 2px 8px rgba(0,0,0,0.6)' }}
             >
               TAP TO START
             </span>

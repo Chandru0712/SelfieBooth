@@ -33,18 +33,18 @@ export const SelectionScreen = ({ onSelectCategory = () => {} }: SelectionScreen
         backgroundSize: 'contain',
         backgroundRepeat: 'no-repeat',
         backgroundAttachment: 'fixed',
-        backgroundColor: '#050d1a',
+        backgroundColor: '#0c0812',
       }}
     >
       {/* Subtle dark overlay */}
-      <div className="absolute inset-0 bg-[rgba(5,13,26,0.45)] pointer-events-none z-0" />
+      <div className="absolute inset-0 bg-[rgba(12,8,18,0.50)] pointer-events-none z-0" />
 
       {/* Main Title */}
       <div className="relative z-10 w-full text-center pt-24 pb-4">
         <h1
           className="text-[clamp(60px,12vw,156px)] font-bold leading-[1.1] tracking-wide"
           style={{
-            background: 'linear-gradient(135deg, #fff 0%, #cbd5e1 100%)',
+            background: 'linear-gradient(135deg, #f0e6ff 0%, #d8b4fe 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
@@ -74,15 +74,15 @@ export const SelectionScreen = ({ onSelectCategory = () => {} }: SelectionScreen
               overflow-hidden
               transition-all duration-300
               ${selectedCategory === category.id
-                ? 'scale-105 border-[rgba(0,242,255,0.8)] bg-[rgba(0,242,255,0.12)]'
-                : 'border-[rgba(0,242,255,0.18)] bg-[rgba(255,255,255,0.08)]'}
+                ? 'scale-105 border-[rgba(224,64,251,0.85)] bg-[rgba(168,85,247,0.15)]'
+                : 'border-[rgba(168,85,247,0.22)] bg-[rgba(255,255,255,0.06)]'}
               ${isTransitioning && selectedCategory !== category.id ? 'opacity-40' : ''}
-              hover:scale-[1.05] hover:-translate-y-0.5 hover:bg-[rgba(255,255,255,0.16)] hover:border-[rgba(0,242,255,0.6)]
+              hover:scale-[1.05] hover:-translate-y-0.5 hover:bg-[rgba(168,85,247,0.14)] hover:border-[rgba(224,64,251,0.65)]
               active:scale-[0.98]
             `}
             style={{
               backdropFilter: 'blur(20px) saturate(1.8) brightness(1.1)',
-              boxShadow: '0 4px 32px 0 rgba(0,0,0,0.12), 0 0 20px rgba(0,242,255,0.08)',
+              boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18), 0 0 20px rgba(168,85,247,0.10)',
               animation: 'pulse-glow-subtle 3s infinite',
             }}
             onClick={() => handleSelectCategory(category.id)}
@@ -100,14 +100,14 @@ export const SelectionScreen = ({ onSelectCategory = () => {} }: SelectionScreen
             />
             <div
               className="text-[64px] transition-transform duration-300"
-              style={{ filter: 'drop-shadow(0 0 10px rgba(0,242,255,0.6))', }}
+              style={{ filter: 'drop-shadow(0 0 10px rgba(224,64,251,0.65))', }}
             >
               {category.emoji}
             </div>
             <div className="flex flex-col gap-1 flex-1 text-left">
               <h3
                 className="text-[64px] font-bold m-0 uppercase tracking-[2px]"
-                style={{ textShadow: '0 0 10px rgba(0,242,255,0.4)' }}
+                style={{ textShadow: '0 0 10px rgba(224,64,251,0.5)' }}
               >
                 {category.name}
               </h3>
