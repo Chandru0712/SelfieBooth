@@ -17,7 +17,7 @@ interface AIImageScreenProps {
   isLoading?: boolean;
 }
 
-function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): React.JSX.Element {
+function AIImageScreen({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): React.JSX.Element {
   // Segmentation tuning variables (change these and rebuild as needed)
   const MASK_THRESHOLD = 0.7; // 0.0 to 1.0 (lowered for better edge detection)
   const MASK_EDGE_BLUR_PX = 4; // Reduced blur for sharper edges
@@ -243,55 +243,7 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
     return canvasToBlob(frameCanvas, FINAL_OUTPUT_MIME, FINAL_OUTPUT_QUALITY);
   };
 
-  const downloadCanvas = (canvas: HTMLCanvasElement): void => {
-    const link = document.createElement('a');
-    link.download = `selfie_${Date.now()}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-  };
 
-  const downloadBlob = (blob: Blob, fileName?: string): void => {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = fileName || `selfie_${Date.now()}.png`;
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const compressImage = async (blob: Blob, maxSizeMB: number = 2): Promise<Blob> => {
-    const maxSizeBytes = maxSizeMB * 1024 * 1024;
-    if (blob.size <= maxSizeBytes) return blob;
-
-    let quality = 0.9;
-    let compressedBlob = blob;
-
-    while (compressedBlob.size > maxSizeBytes && quality > 0.1) {
-      compressedBlob = await new Promise((resolve) => {
-        const img = new Image();
-        const url = URL.createObjectURL(blob);
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0);
-            canvas.toBlob((result) => {
-              URL.revokeObjectURL(url);
-              resolve(result || blob);
-            }, 'image/jpeg', quality);
-          } else {
-            resolve(blob);
-          }
-        };
-        img.src = url;
-      });
-      quality -= 0.1;
-    }
-
-    return compressedBlob;
-  };
 
   const composeForegroundWithBackground = async (foregroundBlob: Blob, dims: { width: number; height: number }): Promise<HTMLCanvasElement> => {
     const foregroundImage = await blobToImage(foregroundBlob);
@@ -613,40 +565,6 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
     }
   };
 
-  const handleContinueCapture = async (): Promise<void> => {
-    if (!capturePreviewBlob) return;
-
-    try {
-      setIsProcessingCapture(true);
-      // Compress image to under 8MB to preserve native 4K quality
-      const compressedBlob = await compressImage(capturePreviewBlob, 8);
-      // Generate UUID v4 filename
-      const fileName = `${uuidv4()}.jpg`;
-      
-      // Create image data object for preview screen
-      const imageData = {
-        url: previewUrl || URL.createObjectURL(compressedBlob),
-        blob: compressedBlob,
-        metadata: {
-          id: uuidv4(),
-          frameId: '',
-          capturedAt: new Date().toISOString(),
-          width: getCaptureDimensions().width,
-          height: getCaptureDimensions().height,
-          size: compressedBlob.size,
-          fileName: fileName,
-        },
-      };
-
-      // Preview screen will handle upload and QR code display
-      // Just mark it as visible
-    } catch (error) {
-      console.error('Failed to process image:', error);
-      setCaptureError('Failed to process image. Please try again.');
-    } finally {
-      setIsProcessingCapture(false);
-    }
-  };
 
   const handleRetakeCapture = (): void => {
     setShowCapturePreview(false);
@@ -806,4 +724,4 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
   );
 }
 
-export default App;
+export default AIImageScreen;

@@ -33,9 +33,6 @@ import { CaptureScreen } from './components/screens/jsx/CaptureScreen';
 import { PreviewScreen } from './components/screens/jsx/PreviewScreen';
 import AIImageScreen from './components/screens/jsx/AIImageScreen';
 
-// ========== 1.1 IMPORTS - HOOKS & SERVICES ==========
-// Import hooks
-import { useSession } from './hooks/useSession';
 
 // ========== 1.2 IMPORTS - TYPES ==========
 import type { ImageData, Frame } from './types';
@@ -53,7 +50,7 @@ const collageFramesRaw = import.meta.glob('./assets/Frames/Collage/*.{png,webp}'
  */
 const formatFrames = (rawGlob: Record<string, any>, categoryName: string): Frame[] => {
   return Object.entries(rawGlob).map(([path, module]) => {
-    const fileName = path.split('/').pop()?.replace('.png', '') || 'unknown';
+    const fileName = path.split('/').pop()?.replace(/\.[^.]+$/, '') || 'unknown';
     const imageUrl = (module as any).default || (module as any);
     return {
       id: `${categoryName}-${fileName}`,
@@ -120,10 +117,6 @@ function App(): ReactElement {
   
   // ========== PHOTO STATE ==========
   const [capturedImageData, setCapturedImageData] = useState<ImageData | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  // Hooks
-  const session = useSession();
 
   // ========== INACTIVITY TIMER ==========
   // 30 minutes in milliseconds
@@ -174,82 +167,19 @@ function App(): ReactElement {
   };
 
   /**
-   * Handle quick mode (skip category selection)
+   * Handle photo capture — stores image and shows preview
    */
-  const handleQuickMode = (): void => {
-    setCurrentScreen(SCREENS.CAPTURE);
+  const handleCapture = (imageData: ImageData): void => {
+    setCapturedImageData(imageData);
+    setCurrentScreen(SCREENS.PREVIEW);
   };
 
-  /**
-   * Handle photo capture
-   * Creates session and saves to storage
-   */
-  const handleCapture = async (imageData: ImageData): Promise<void> => {
-    try {
-      setIsProcessing(true);
-
-      // Create session if needed
-      let sessionId = session.currentSession?.id;
-      if (!sessionId) {
-        const newSession = await session.createSession({
-          category: selectedCategory,
-        });
-        sessionId = newSession.id;
-      }
-
-      // Skip auto-save, just show preview
-      // await session.savePhoto(imageData.blob, imageData.metadata);
-
-      // Store for preview
-      setCapturedImageData(imageData);
-      
-      // Transition to preview screen
-      setCurrentScreen(SCREENS.PREVIEW);
-    } catch (error) {
-      console.error('Capture failed:', error);
-      alert('Failed to save photo. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  /**
-   * Handle retake - go back to capture
-   */
-  const handleRetake = (): void => {
-    setCapturedImageData(null);
-    setCurrentScreen(SCREENS.CAPTURE);
-  };
-
-  /**
-   * Handle save (already saved to IndexedDB in handleCapture)
-   */
-  const handleSave = (imageData: ImageData): void => {
-    // Photo is already saved, just provide feedback
-    console.log('Photo saved:', imageData);
-  };
-
-  /**
-   * Handle print
-   */
-  const handlePrint = (imageData: ImageData): void => {
-    console.log('Print requested:', imageData);
-    // Printer integration in Phase 3
-  };
-
-  /**
-   * Handle share
-   */
-  const handleShare = (imageData: ImageData): void => {
-    console.log('Share requested:', imageData);
-  };
 
   /**
    * Go back to welcome
    */
   const handleBackToWelcome = (): void => {
     setCurrentScreen(SCREENS.WELCOME);
-    session.endSession();
     setCapturedImageData(null);
   };
 
@@ -301,47 +231,11 @@ function App(): ReactElement {
   /**
    * Navigation helpers
    */
-  const handleBackFromSelection = (): void => {
-    setCurrentScreen(SCREENS.WELCOME);
+  const handleAIImageGenerated = (imageData: ImageData): void => {
+    setCapturedImageData(imageData);
+    setCurrentScreen(SCREENS.PREVIEW);
   };
 
-  const handleBackFromAI = (): void => {
-    setCurrentScreen(SCREENS.SELECTION);
-  };
-
-  const handleAIImageGenerated = async (imageData: ImageData): Promise<void> => {
-    try {
-      setIsProcessing(true);
-
-      // Create session if needed
-      let sessionId = session.currentSession?.id;
-      if (!sessionId) {
-        const newSession = await session.createSession({
-          category: selectedCategory,
-        });
-        sessionId = newSession.id;
-      }
-
-      // Store for preview
-      setCapturedImageData(imageData);
-      
-      // Transition to preview screen
-      setCurrentScreen(SCREENS.PREVIEW);
-    } catch (error) {
-      console.error('AI image generation failed:', error);
-      alert('Failed to process AI image. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleBackFromCapture = (): void => {
-    setCurrentScreen(SCREENS.SELECTION);
-  };
-
-  const handleBackFromPreview = (): void => {
-    handleRetake();
-  };
 
   /**
    * Screen rendering
@@ -370,8 +264,7 @@ function App(): ReactElement {
         return (
           <AIImageScreen
             onGenerate={handleAIImageGenerated}
-            onBack={handleBackFromAI}
-            isLoading={isProcessing}
+            onBack={() => setCurrentScreen(SCREENS.SELECTION)}
           />
         );
 
@@ -383,8 +276,7 @@ function App(): ReactElement {
             selectedFrame={selectedFrame}
             onSelectFrame={setSelectedFrame}
             onCapture={handleCapture}
-            onBack={handleBackFromCapture}
-            isLoading={isProcessing}
+            onBack={() => setCurrentScreen(SCREENS.SELECTION)}
           />
         );
 
@@ -394,9 +286,8 @@ function App(): ReactElement {
             imageData={capturedImageData}
             isVisible={true}
             showAsOverlay={true}
-            onRetake={handleBackFromPreview}
+            onRetake={() => { setCapturedImageData(null); setCurrentScreen(SCREENS.CAPTURE); }}
             onContinue={handleBackToWelcome}
-            isLoading={isProcessing}
           />
         ) : (
           <WelcomeScreen onStart={() => setCurrentScreen(SCREENS.SELECTION)} />
