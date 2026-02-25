@@ -32,10 +32,7 @@ export const APP_CONFIG = {
   FLASH_DURATION_MS: 200, // camera flash overlay duration
   SMOOTH_SCROLL_BEHAVIOR: 'smooth',
 
-  // Colors (from CSS variables)
-  PRIMARY_COLOR: '#6366f1',
-  ACCENT_COLOR: '#f43f5e',
-  BACKGROUND_COLOR: '#000',
+  // Colors removed for neutral UI
 } as const;
 
 // ========== 2.0 CAMERA_CONFIG - CAMERA CONSTRAINTS & OPTIMIZATION ==========

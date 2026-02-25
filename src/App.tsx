@@ -24,7 +24,6 @@
  */
 
 import { useState, useEffect, useRef, ReactElement } from 'react';
-import './App.css';
 
 // ========== 1.0 IMPORTS - SCREENS ==========
 // Import screens
@@ -82,6 +81,35 @@ type ScreenType = typeof SCREENS[keyof typeof SCREENS];
  * Main App Component - Screen flow orchestrator
  */
 function App(): ReactElement {
+  // ========== KIOSK: DISABLE PINCH-ZOOM & LONG-PRESS (SWIPE/SCROLL ALLOWED) ==========
+  useEffect(() => {
+    /**
+     * Block context menu — prevents long-press popup on touch devices
+     * (e.g. "Copy", "Open link", "Save image" menus).
+     */
+    const blockContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
+    /**
+     * Block gesturestart / gesturechange — prevents native
+     * pinch-to-zoom on Safari/iOS (non-standard but widely supported).
+     */
+    const blockGesture = (e: Event) => {
+      e.preventDefault();
+    };
+
+    // Attach blockers
+    document.addEventListener('contextmenu', blockContextMenu);
+    document.addEventListener('gesturestart', blockGesture);
+    document.addEventListener('gesturechange', blockGesture);
+
+    return () => {
+      document.removeEventListener('contextmenu', blockContextMenu);
+      document.removeEventListener('gesturestart', blockGesture);
+      document.removeEventListener('gesturechange', blockGesture);
+    };
+  }, []); // Run once on mount
   // ========== SCREEN STATE ==========
   const [currentScreen, setCurrentScreen] = useState<ScreenType>(SCREENS.WELCOME);
   const [selectedCategory, setSelectedCategory] = useState<string>('children');
@@ -381,7 +409,7 @@ function App(): ReactElement {
 
   // ========== 7.0 JSX RETURN ==========
   return (
-    <div className="app">
+    <div className="relative w-screen h-screen overflow-hidden bg-[#050d1a] text-[#e2e8f0] font-[Outfit]">
       {/* Error boundary handled by main.tsx */}
       {renderScreen()}
     </div>

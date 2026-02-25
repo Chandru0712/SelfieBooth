@@ -1,120 +1,116 @@
-/**
- * ================================================================================
- * FILE: WelcomeScreen.jsx - WELCOME & INTRODUCTION SCREEN
- * ================================================================================
- * 
- * Phase 1 MVP: US-050 Welcome & Introduction Screen
- * Simple tap-to-start welcome screen with pre-camera permission request
- * 
- * STRUCTURE:
- * 1.0 IMPORTS & PROPS
- * 2.0 STATE MANAGEMENT & LIFECYCLE
- * 3.0 CAMERA PRE-REQUEST (BACKGROUND)
- * 4.0 JSX / RENDER
- * 
- * ================================================================================
- */
-
 import { useEffect, useState } from 'react';
 import bg1 from '../../../assets/Welcome-01-4k.webp';
 import bg2 from '../../../assets/Welcome-02-4k.webp';
 
-import '../styles/screens.css';
-
-// ---- Add or remove images from this list to change the pool ----
 const BACKGROUND_IMAGES = [bg1, bg2];
 
-/**
- * Pick a background image ONCE at app startup — randomly.
- * - Each kiosk independently picks a different random image on launch.
- * - Same image is locked in for the whole session (no change on auto-reset or remount).
- * - Only changes when the app/browser is fully restarted.
- */
 const SESSION_BACKGROUND: string =
   BACKGROUND_IMAGES[Math.floor(Math.random() * BACKGROUND_IMAGES.length)];
-
 
 interface WelcomeScreenProps {
   onStart?: () => void;
 }
 
-// ========== 1.0 COMPONENT & PROPS ==========
 export const WelcomeScreen = ({ onStart = () => {} }: WelcomeScreenProps) => {
-  // ========== 2.0 STATE MANAGEMENT & LIFECYCLE ==========
   const [isAnimating, setIsAnimating] = useState(false);
   const [isRequestingCamera, setIsRequestingCamera] = useState(false);
-  // Background is fixed for the whole session — no re-pick on remount
   const currentBg = SESSION_BACKGROUND;
 
-  // ========== 3.0 CAMERA PRE-REQUEST (BACKGROUND) ==========
   useEffect(() => {
-    // Trigger animation on mount
     setIsAnimating(true);
-
-    // Pre-request camera permission to have it ready
     const preRequestCamera = async () => {
       try {
         setIsRequestingCamera(true);
-        // Request camera access in the background
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'user',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          },
-          audio: false
+          video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false,
         });
-        
-        // Immediately stop the stream - we just wanted to request permission
         stream.getTracks().forEach(track => track.stop());
-        console.log('✓ Camera permission granted and ready');
       } catch (error) {
-        // Silently fail - user will be prompted again on capture screen if needed
         console.log('Camera permission not granted yet:', (error as Error).message);
       } finally {
         setIsRequestingCamera(false);
       }
     };
-
-    // Request after a short delay so the welcome screen renders first
     const timeout = setTimeout(preRequestCamera, 500);
-    
     return () => clearTimeout(timeout);
   }, []);
 
-  // ========== 4.0 JSX / RENDER ==========
   return (
-    <div className="welcome-screen" onClick={onStart}>
-      {/* Random background image */}
+    /* Full-screen wrapper — background image, clickable */
+    <div
+      className="relative flex items-center justify-center w-screen h-screen overflow-hidden cursor-pointer"
+      onClick={onStart}
+    >
+      {/* Background image layer */}
       <div
-        className="welcome-bg-image"
+        className="absolute inset-0 bg-center bg-cover bg-no-repeat"
         style={{ backgroundImage: `url(${currentBg})` }}
       />
-      {/* Background gradient overlay */}
-      <div className="welcome-bg-gradient" />
 
-      {/* Main content container */}
-      <div className={`welcome-content ${isAnimating ? 'animated' : ''}`}>
-        {/* Logo/Brand */}
-        <div className="welcome-logo-container">
-          <div className="welcome-logo">SNAPSHOT</div>
+      {/* Dark gradient overlay for depth */}
+      <div className="absolute inset-0 bg-gradient-to-t from-[rgba(5,13,26,0.55)] via-transparent to-[rgba(5,13,26,0.3)]" />
+
+      {/* Content — fades + slides in on mount */}
+      <div
+        className={`relative z-10 flex flex-col items-center justify-between h-full w-full px-5 py-16
+          transition-all duration-700 ease-out
+          ${isAnimating ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
+      >
+        {/* Brand / Logo */}
+        <div className="flex flex-col items-center gap-2">
+          <span
+            className="text-2xl tracking-[6px] text-white/80 uppercase font-[Righteous]"
+            style={{ animation: 'float 4s ease-in-out infinite' }}
+          >
+            SNAPSHOT
+          </span>
         </div>
 
-        {/* Vertical Title Stack */}
-        {/* <div className="welcome-title-container">
-          <h1 className="welcome-title-line">SELFIE</h1>
-          <h1 className="welcome-title-line">BOOTH</h1>
-          <h1 className="welcome-title-line highlight">PRO</h1>
-        </div> */}
-
-        {/* Glass Button Instruction */}
-        <div className="welcome-action-container">
-          <div className="glass-button-large">
-            <span className="tap-icon">👆</span>
-            <span className="tap-text">TAP TO START</span>
+        {/* Center: Tap-to-Start glass button */}
+        <div className="flex items-center justify-center flex-1 w-full">
+          {/* Glassmorphism TAP TO START */}
+          <div
+            className="
+              shimmer-btn
+              flex items-center justify-center gap-8
+              px-24 py-10
+              rounded-[28px]
+              border border-[rgba(100,160,255,0.35)]
+              transition-all duration-350 ease-out
+              hover:scale-105 hover:-translate-y-1
+              active:scale-[0.98]
+            "
+            style={{
+              background: 'rgba(5,13,26,0.35)',
+              backdropFilter: 'blur(20px) saturate(1.6)',
+              WebkitBackdropFilter: 'blur(20px) saturate(1.6)',
+              boxShadow: '0 8px 40px rgba(0,30,80,0.45), inset 0 1px 0 rgba(255,255,255,0.10)',
+            }}
+          >
+            {/* Bouncing finger icon */}
+            <span
+              className="text-5xl"
+              style={{ filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))', animation: 'bounce-icon 1.5s infinite ease-in-out' }}
+            >
+              👆
+            </span>
+            {/* Label */}
+            <span
+              className="text-[54px] font-extrabold tracking-[3px] text-white font-[Pacifico]"
+              style={{ textShadow: '0 0 20px rgba(100,180,255,0.6), 0 2px 8px rgba(0,0,0,0.5)' }}
+            >
+              TAP TO START
+            </span>
           </div>
         </div>
+
+        {/* Bottom spacer so content doesn't touch edge */}
+        <div className="h-8" />
       </div>
+
+      {/* Hidden: camera request status — no UI needed */}
+      {isRequestingCamera && <span className="sr-only">Requesting camera…</span>}
     </div>
   );
 };

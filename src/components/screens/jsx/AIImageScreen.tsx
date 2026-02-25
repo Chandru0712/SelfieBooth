@@ -4,8 +4,6 @@ import { SelfieSegmentation, Results } from '@mediapipe/selfie_segmentation';
 import { Camera } from '@mediapipe/camera_utils';
 import { v4 as uuidv4 } from 'uuid';
 import PreviewScreen from './PreviewScreen';
-import '../styles/screens.css';
-import '../styles/AIImageScreen.css';
 
 interface ImglyModule {
   default?: (blob: Blob, config: any) => Promise<Blob>;
@@ -32,16 +30,19 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
   const MEDIAPIPE_BASE_URL = '/models/';
   const MEDIAPIPE_ASSET_VERSION = '2026-02-16';
 
-  const [timer, setTimer] = useState<number>(0); // 0 = not taking photo
-  const [selectedCountdown, setSelectedCountdown] = useState<number>(5); // Countdown timer in seconds
-  const [isCountdownDropdownOpen, setIsCountdownDropdownOpen] = useState<boolean>(false); // Dropdown state
-  const [isFlashing, setIsFlashing] = useState<boolean>(false); // For the white flash effect
+  const [timer, setTimer] = useState<number>(0);
+  const [selectedCountdown, setSelectedCountdown] = useState<number>(5);
+  const [isCountdownDropdownOpen, setIsCountdownDropdownOpen] = useState<boolean>(false);
+  const [isFlashing, setIsFlashing] = useState<boolean>(false);
   const [isProcessingCapture, setIsProcessingCapture] = useState<boolean>(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [processingTimeMs, setProcessingTimeMs] = useState<number | null>(null);
   const [activeBackgroundName, setActiveBackgroundName] = useState<string | null>(null);
   const [frameDimensions, setFrameDimensions] = useState<{ width: number; height: number }>({ width: 640, height: 480 });
   const [previewDimensions, setPreviewDimensions] = useState({ width: "80%", height: "auto" });
+  const [isFrameDragging, setIsFrameDragging] = useState(false);
+  const [frameDragStart, setFrameDragStart] = useState(0);
+  const [frameDragStartScroll, setFrameDragStartScroll] = useState(0);
 
   useEffect(() => {
     const computeDimensions = () => {
@@ -141,12 +142,52 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
   // Scroll to selected background whenever it changes
   useEffect(() => {
     if (!frameScrollRef.current || !activeBackgroundName) return;
-    const track = frameScrollRef.current;
-    const selected = track.querySelector('.frame-item.is-selected') as HTMLElement;
+    const container = frameScrollRef.current;
+    const selected = container.querySelector('.frame-item-selected') as HTMLElement;
     if (selected) {
-      selected.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      const containerWidth = container.offsetWidth;
+      const btnLeft = selected.offsetLeft;
+      const btnWidth = selected.offsetWidth;
+      container.scrollTo({ left: Math.max(0, btnLeft + btnWidth / 2 - containerWidth / 2), behavior: 'smooth' });
     }
   }, [activeBackgroundName]);
+
+  // Native (non-passive) wheel → horizontal scroll on the frame strip
+  useEffect(() => {
+    const el = frameScrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      el.scrollLeft += e.deltaY || e.deltaX;
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // Drag-to-scroll handlers for frame strip
+  const handleFrameDragStart = (e: React.MouseEvent<HTMLDivElement>) => {
+    setIsFrameDragging(true);
+    setFrameDragStart(e.clientX);
+    setFrameDragStartScroll(frameScrollRef.current?.scrollLeft || 0);
+  };
+
+  const handleFrameDragMove = useCallback((e: MouseEvent) => {
+    if (!frameScrollRef.current || !isFrameDragging) return;
+    const diff = e.clientX - frameDragStart;
+    frameScrollRef.current.scrollLeft = frameDragStartScroll - diff;
+  }, [frameDragStart, frameDragStartScroll, isFrameDragging]);
+
+  const handleFrameDragEnd = useCallback(() => setIsFrameDragging(false), []);
+
+  useEffect(() => {
+    if (!isFrameDragging) return;
+    window.addEventListener('mousemove', handleFrameDragMove);
+    window.addEventListener('mouseup', handleFrameDragEnd);
+    return () => {
+      window.removeEventListener('mousemove', handleFrameDragMove);
+      window.removeEventListener('mouseup', handleFrameDragEnd);
+    };
+  }, [isFrameDragging, handleFrameDragMove, handleFrameDragEnd]);
 
   const waitForPaint = (): Promise<void> =>
     new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
@@ -617,37 +658,56 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
   };
 
   return (
-    <div className="capture-screen-modern">
-      {/* SECTION 1: Top Header */}
-      <div className="layout-header">
-        <button className="back-circle-btn" onClick={onBack}>
+    <div className="flex flex-col w-screen h-screen bg-[#050d1a] overflow-hidden">
+
+      {/* ── HEADER ── */}
+      <div className="flex items-center justify-between px-8 py-5 bg-gradient-to-r from-[rgba(0,100,255,0.10)] to-[rgba(0,40,120,0.14)] border-b border-[rgba(56,139,253,0.18)] shrink-0">
+        <button
+          className="w-[125px] h-[125px] rounded-full flex items-center justify-center text-[#e2e8f0] bg-[rgba(10,30,80,0.5)] border-2 border-[rgba(56,139,253,0.3)] transition-all duration-300 hover:bg-[rgba(56,139,253,0.2)] hover:text-white"
+          onClick={onBack}
+        >
           <svg width="75" height="75" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <h1 className="category-title">Creativity Zone</h1>
-        <div style={{ width: 44 }} /> 
+        <h1 className="font-[Arial] text-[10rem] uppercase tracking-[2px] text-[#e2e8f0] m-0">Creativity Zone</h1>
+        <div style={{ width: 44 }} />
       </div>
 
-      {/* SECTION 2: Control Panel (Timer, Capture, Zoom) */}
-      <div className="layout-controls" style={{ flexDirection: "column", gap: 20 }}>
-        <button className="main-shutter-btn" onClick={startPhotoProcess} disabled={timer > 0 || isProcessingCapture}>
-          <div className="shutter-inner" />
+      {/* ── CONTROLS ── */}
+      <div className="flex flex-col items-center gap-5 px-[50px] py-4 mt-[20px] shrink-0">
+        {/* Shutter button */}
+        <button
+          className="w-[150px] h-[150px] rounded-full p-[5px] transition-all duration-300 disabled:opacity-50 active:scale-[0.96]"
+          style={{
+            border: '4px solid #3b82f6',
+            background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+            boxShadow: '0 0 24px rgba(59,130,246,0.35)',
+          }}
+          onClick={startPhotoProcess}
+          disabled={timer > 0 || isProcessingCapture}
+        >
+          <div className="w-full h-full rounded-full" style={{ background: 'linear-gradient(135deg, #0f2240 0%, #0a1628 100%)', boxShadow: '0 0 24px rgba(59,130,246,0.4), inset 0 0 12px rgba(59,130,246,0.1)' }} />
         </button>
 
-        <div className="control-group" ref={dropdownRef} style={{ marginTop: 50}}>
-          <button className="sub-control-btn" onClick={() => setIsCountdownDropdownOpen(!isCountdownDropdownOpen)} disabled={timer > 0 || isProcessingCapture}>
-            <small>TIMER</small>
-            <strong>{selectedCountdown}s</strong>
+        {/* Timer dropdown */}
+        <div className="relative mt-[50px]" ref={dropdownRef}>
+          <button
+            className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[rgba(56,139,253,0.5)] bg-[rgba(10,22,40,0.6)] text-[#e2e8f0] font-black transition-all duration-300 hover:bg-[rgba(56,139,253,0.15)] hover:text-white disabled:opacity-50"
+            style={{ boxShadow: '0 0 8px rgba(56,139,253,0.15)' }}
+            onClick={() => setIsCountdownDropdownOpen(!isCountdownDropdownOpen)}
+            disabled={timer > 0 || isProcessingCapture}
+          >
+            <small className="text-[1.1rem] text-[#94a3b8] uppercase tracking-widest">TIMER</small>
+            <strong className="text-[2rem]">{selectedCountdown}s</strong>
           </button>
           {isCountdownDropdownOpen && (
-            <div className="popup-overlay" style={{ maxHeight: 'none', overflowY: 'visible', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#3b82f6] bg-[rgba(10,22,40,0.97)]" style={{ boxShadow: '0 8px 32px rgba(59,130,246,0.18)' }}>
               {[5, 10, 15, 20, 25, 30].map(v => (
-                <button 
-                  key={v} 
-                  className={selectedCountdown === v ? "active-option" : ""}
-                  onClick={() => {setSelectedCountdown(v); setIsCountdownDropdownOpen(false);}}
-                  style={{ width: '50%' }}
+                <button
+                  key={v}
+                  className={`w-full py-4 text-[1.5rem] font-semibold border-none transition-all duration-200 ${selectedCountdown === v ? 'bg-[rgba(59,130,246,0.12)] text-white' : 'text-[#3b82f6] hover:bg-[rgba(59,130,246,0.12)] hover:text-white'}`}
+                  onClick={() => { setSelectedCountdown(v); setIsCountdownDropdownOpen(false); }}
                 >
                   {v}s
                 </button>
@@ -657,52 +717,32 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
         </div>
       </div>
 
-      {/* SECTION 3: Dynamic Preview Container */}
-      <div className="layout-preview-area">
-        <div 
-          className="camera-wrapper"
-          style={{ 
-            width: previewDimensions.width, 
-            height: previewDimensions.height, 
-            position: "relative",
-            margin: "0 auto",
-            flexShrink: 0
-          }}
-        >
-          <div 
-            className="camera-box" 
-            style={{ width: "100%", height: "100%" }}
-          >
+      {/* ── CAMERA PREVIEW ── */}
+      <div className="flex items-start justify-center relative px-[10px] mt-[10px]">
+        <div style={{ width: previewDimensions.width, height: previewDimensions.height, position: 'relative', margin: '0 auto', flexShrink: 0 }}>
+          <div className="relative rounded-[24px] overflow-hidden bg-black w-full h-full" style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }}>
             {/* Hidden Webcam */}
-            <Webcam 
-              ref={webcamRef} 
-              style={{ display: 'none' }} 
-              width={frameDimensions.width} 
-              height={frameDimensions.height} 
-              videoConstraints={{
-                width: { ideal: 3840, min: 1920 },
-                height: { ideal: 2160, min: 1080 },
-                facingMode: "user"
-              }}
+            <Webcam
+              ref={webcamRef}
+              style={{ display: 'none' }}
+              width={frameDimensions.width}
+              height={frameDimensions.height}
+              videoConstraints={{ width: { ideal: 3840, min: 1920 }, height: { ideal: 2160, min: 1080 }, facingMode: "user" }}
             />
-
             {/* Main Display Canvas */}
             <canvas
               ref={canvasRef}
               width={frameDimensions.width}
               height={frameDimensions.height}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            ></canvas>
-
+            />
             {isFlashing && <div className="screen-flash" />}
-            {/* PROCESSING OVERLAY - Image Mask Processing */}
+            {/* Processing overlay */}
             {isProcessingCapture && (
-              <div className="processing-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", zIndex: 10005, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#0a0a1a" }}>
-                <div className="processing-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <div className="spinner"/>
-                  <div className="processing-text" style={{ color: "white", fontSize: "5rem", marginTop: 20 }}>Processing...</div>
-                  <div className="processing-subtext" style={{ color: "white", fontSize: "2rem", marginTop: 10 }}>Background Mask</div>
-                </div>
+              <div className="fixed inset-0 z-[10005] flex items-center justify-center flex-col bg-[#0a0a1a]">
+                <div className="spinner" />
+                <div className="text-white text-[5rem] mt-5 font-bold">Processing...</div>
+                <div className="text-white text-[2rem] mt-2.5">Background Mask</div>
               </div>
             )}
           </div>
@@ -710,25 +750,35 @@ function App({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): 
         </div>
       </div>
 
-      {/* SECTION 4: Frame Selector */}
-      <div className="layout-frame-selector">
-        <div className="frame-track" ref={frameScrollRef}>
-          {backgroundList.map((bg) => (
-            <button
-              key={bg}
-              className={`frame-item ${activeBackgroundName === bg ? "is-selected" : ""}`}
-              onClick={() => setTimeout(() => loadBackground(bg), 0)}
-            >
-              <img src={bg} alt={bg.split('/').pop() || 'Frame'} draggable="false" />
-            </button>
-          ))}
+      {/* ── FRAME / BACKGROUND SELECTOR ── */}
+      <div
+        className="mt-[50px] mb-[50px] min-h-[160px] w-full overflow-x-auto"
+        style={{ scrollbarWidth: 'none', cursor: isFrameDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
+        ref={frameScrollRef}
+        onMouseDown={handleFrameDragStart}
+        onDragStart={(e) => e.preventDefault()}
+      >
+        <div className="flex gap-[30px] min-w-full w-max mx-auto px-[40px] py-[28px]">
+          {backgroundList.map((bg) => {
+            const isSelected = activeBackgroundName === bg;
+            return (
+              <button
+                key={bg}
+                className={`h-[200px] w-auto shrink-0 rounded-sm overflow-hidden bg-transparent p-0 flex items-center justify-center transition-transform duration-200 ${
+                  isSelected ? 'frame-item-selected border-[3px]' : 'border-[3px] border-transparent'
+                }`}
+                onClick={() => setTimeout(() => loadBackground(bg), 0)}
+              >
+                <img src={bg} alt={bg.split('/').pop() || 'Frame'} draggable="false" className="h-full w-auto object-contain block" />
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {processingTimeMs !== null && (
-        <p className="ai-capture-processing" style={{ display: 'none' }}>Processed in {(processingTimeMs / 1000).toFixed(2)}s</p>
-      )}
-      {captureError && <p className="ai-capture-error" style={{ display: 'none' }}>{captureError}</p>}
+      {/* Hidden status readouts */}
+      {processingTimeMs !== null && <p className="hidden">Processed in {(processingTimeMs / 1000).toFixed(2)}s</p>}
+      {captureError && <p className="hidden">{captureError}</p>}
 
       <PreviewScreen
         imageData={capturePreviewBlob ? {
