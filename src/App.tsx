@@ -42,7 +42,7 @@ import type { ImageData, Frame } from './types';
 const childrenFramesRaw = import.meta.glob('./assets/Frames/Children/*.{png,webp}', { eager: true, query: '?url' });
 const adultFramesRaw = import.meta.glob('./assets/Frames/Adult/*.{png,webp}', { eager: true, query: '?url' });
 const proverbFramesRaw = import.meta.glob('./assets/Frames/Proverb/*.{png,webp}', { eager: true, query: '?url' });
-const collageFramesRaw = import.meta.glob('./assets/Frames/Collage/*.{png,webp}', { eager: true, query: '?url' });
+const collageFramesRaw = import.meta.glob('./assets/Frames/Creative/*.{png,webp}', { eager: true, query: '?url' });
 // ========== 2.0 FRAME DATA LOADING & FORMATTING ==========
 
 /**
@@ -139,8 +139,8 @@ function App(): ReactElement {
       case 'proverb':
         categoryFrames = formatFrames(proverbFramesRaw, 'proverb');
         break;
-      case 'collage':
-        categoryFrames = formatFrames(collageFramesRaw, 'collage');
+      case 'creative':
+        categoryFrames = formatFrames(collageFramesRaw, 'creative');
         break;
       default:
         categoryFrames = [];
@@ -159,7 +159,7 @@ function App(): ReactElement {
    */
   const handleSelectCategory = (category: string): void => {
     setSelectedCategory(category);
-    if (category === 'blend') {
+    if (category === 'blend' || category === 'wildlife') {
       setCurrentScreen(SCREENS.AI_IMAGE);
     } else {
       setCurrentScreen(SCREENS.CAPTURE);
@@ -244,7 +244,20 @@ function App(): ReactElement {
   // (All handlers are defined above in useEffect blocks and callback functions)
 
   // ========== 6.0 SCREEN RENDERING (CONDITIONAL DISPLAY) ==========
+  const getCategoryName = (id: string) => {
+    const names: Record<string, string> = {
+      children: 'Children',
+      adult: 'Adult',
+      proverb: 'Proverb',
+      creative: 'Creative',
+      wildlife: 'Wild Life'
+    };
+    return names[id] || id;
+  };
+
   const renderScreen = (): ReactElement => {
+    const categoryName = getCategoryName(selectedCategory);
+
     switch (currentScreen) {
       case SCREENS.WELCOME:
         return (
@@ -263,6 +276,7 @@ function App(): ReactElement {
       case SCREENS.AI_IMAGE:
         return (
           <AIImageScreen
+            category={categoryName}
             onGenerate={handleAIImageGenerated}
             onBack={() => setCurrentScreen(SCREENS.SELECTION)}
           />
@@ -271,7 +285,7 @@ function App(): ReactElement {
       case SCREENS.CAPTURE:
         return (
           <CaptureScreen
-            category={selectedCategory}
+            category={categoryName}
             frames={frames}
             selectedFrame={selectedFrame}
             onSelectFrame={setSelectedFrame}

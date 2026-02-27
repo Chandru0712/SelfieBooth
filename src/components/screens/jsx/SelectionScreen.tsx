@@ -8,10 +8,10 @@ interface SelectionScreenProps {
 
 const CATEGORIES: Category[] = [
   { id: 'children', name: 'Children',  description: 'Playful and colorful frames',           emoji: '🎨' },
-  { id: 'adult',    name: 'Adult',     description: 'Sophisticated and professional',         emoji: '✨' },
+  // { id: 'adult',    name: 'Adult',     description: 'Sophisticated and professional',         emoji: '✨' },
   { id: 'proverb',  name: 'Proverb',   description: 'Thoughtful and inspiring',              emoji: '🌟' },
-  { id: 'collage',  name: 'Creative',  description: 'Multi-frame layouts',                    emoji: '🎭' },
-  { id: 'blend',    name: 'Blend',     description: 'Generate with artificial intelligence',  emoji: '🤖' },
+  { id: 'creative',  name: 'Creative',  description: 'Multi-frame layouts',                    emoji: '🎭' },
+  { id: 'wildlife',    name: 'WildLife',     description: 'Generate with artificial intelligence',  emoji: '🤖' },
 ];
 
 export const SelectionScreen = ({ onSelectCategory = () => {} }: SelectionScreenProps) => {
@@ -42,7 +42,7 @@ export const SelectionScreen = ({ onSelectCategory = () => {} }: SelectionScreen
       {/* Main Title */}
       <div className="relative z-10 w-full text-center pt-24 pb-4">
         <h1
-          className="text-[clamp(60px,12vw,156px)] font-bold leading-[1.1] tracking-wide"
+          className="text-[clamp(80px,18vw,150px)] font-bold leading-[1.1] tracking-wide"
           style={{
             background: 'linear-gradient(135deg, #f0e6ff 0%, #d8b4fe 100%)',
             WebkitBackgroundClip: 'text',
@@ -50,12 +50,12 @@ export const SelectionScreen = ({ onSelectCategory = () => {} }: SelectionScreen
             backgroundClip: 'text',
           }}
         >
-          Take Selfie with the nature
+          Take Selfie With The Nature
         </h1>
       </div>
 
-      {/* Category grid — centered vertically */}
-      <div className="relative z-10 flex flex-col items-center gap-6 w-full max-w-[800px] mx-auto mb-auto mt-auto pb-[100px]">
+      {/* Category grid — properly centered vertically */}
+      <div className="relative z-10 flex flex-col items-center justify-center gap-6 w-full max-w-[800px] mx-auto flex-1 pb-[500px]">
         <h2
           className="text-[72px] font-[Righteous] text-white text-center tracking-[2px]"
           style={{ textShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
@@ -104,7 +104,7 @@ export const SelectionScreen = ({ onSelectCategory = () => {} }: SelectionScreen
             >
               {category.emoji}
             </div>
-            <div className="flex flex-col gap-1 flex-1 text-left">
+            <div className="flex flex-col items-center justify-center gap-1 flex-1 text-center">
               <h3
                 className="text-[64px] font-bold m-0 uppercase tracking-[2px]"
                 style={{ textShadow: '0 0 10px rgba(224,64,251,0.5)' }}

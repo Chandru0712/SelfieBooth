@@ -305,15 +305,15 @@ export const CaptureScreen = ({
         {/* Timer */}
         <div className="relative" ref={timerWrapperRef}>
           <button
-            className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[rgba(168,85,247,0.55)] bg-[rgba(19,13,30,0.6)] text-[#f0e6ff] font-black transition-all duration-300 hover:bg-[rgba(168,85,247,0.18)] hover:text-white"
-            style={{ boxShadow: '0 0 8px rgba(168,85,247,0.18)' }}
+            className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.6)] text-[#f0e6ff] font-black transition-all duration-300 hover:bg-[rgba(168,85,247,0.18)] hover:text-white"
+            style={{ boxShadow: '0 0 8px rgba(168,85,247,0.18)', border: '1px solid #a855f7' }}
             onClick={() => setShowTimerPopup(!showTimerPopup)}
           >
             <small className="text-[1.1rem] text-[#b8a4d4] uppercase tracking-widest">TIMER</small>
             <strong className="text-[2rem]">{timerDuration}s</strong>
           </button>
           {showTimerPopup && (
-            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)]" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
+            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)] overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
               {[0, 5, 10, 15, 20, 25, 30].map(v => (
                 <button key={v} className={`w-full py-4 text-center text-[1.5rem] font-semibold border-none transition-all duration-200 ${timerDuration === v ? 'bg-[rgba(168,85,247,0.15)] text-white' : 'text-[#a855f7] hover:bg-[rgba(168,85,247,0.15)] hover:text-white'}`}
                   onClick={() => { setTimerDuration(v); setShowTimerPopup(false); }}>
@@ -326,11 +326,9 @@ export const CaptureScreen = ({
 
         {/* Shutter button */}
         <button
-          className="w-[150px] h-[150px] rounded-full p-[5px] transition-all duration-300 disabled:opacity-50 active:scale-[0.96]"
+          className="w-[150px] h-[150px] rounded-full p-[5px] transition-all duration-300 disabled:opacity-50 active:scale-[0.96] shutter-btn-animate"
           style={{
-            border: '4px solid #a855f7',
             background: 'linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)',
-            boxShadow: '0 0 28px rgba(168,85,247,0.45)',
           }}
           onClick={handleCaptureClick}
           disabled={isCapturing || isProcessing || !isInitialized}
@@ -341,15 +339,15 @@ export const CaptureScreen = ({
         {/* Zoom */}
         <div className="relative" ref={zoomWrapperRef}>
           <button
-            className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[rgba(168,85,247,0.55)] bg-[rgba(19,13,30,0.6)] text-[#f0e6ff] font-black transition-all duration-300 hover:bg-[rgba(168,85,247,0.18)] hover:text-white"
-            style={{ boxShadow: '0 0 8px rgba(168,85,247,0.18)' }}
+            className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.6)] text-[#f0e6ff] font-black transition-all duration-300 hover:bg-[rgba(168,85,247,0.18)] hover:text-white"
+            style={{ boxShadow: '0 0 8px rgba(168,85,247,0.18)', border: '1px solid #a855f7' }}
             onClick={() => setShowZoomPopup(!showZoomPopup)}
           >
             <small className="text-[1.1rem] text-[#b8a4d4] uppercase tracking-widest">ZOOM</small>
             <strong className="text-[2rem]">{zoomLevel}x</strong>
           </button>
           {showZoomPopup && (
-            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)]" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
+            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)] overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
               {ZOOM_OPTIONS.map(v => (
                 <button key={v} className={`w-full py-4 text-center text-[1.5rem] font-semibold border-none transition-all duration-200 ${zoomLevel === v ? 'bg-[rgba(168,85,247,0.15)] text-white' : 'text-[#a855f7] hover:bg-[rgba(168,85,247,0.15)] hover:text-white'}`}
                   onClick={() => { setZoomLevel(v); setShowZoomPopup(false); }}>

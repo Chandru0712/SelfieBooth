@@ -12,12 +12,13 @@ interface ImglyModule {
 }
 
 interface AIImageScreenProps {
+  category?: string;
   onBack?: () => void;
   onGenerate?: (imageData: any) => void;
   isLoading?: boolean;
 }
 
-function AIImageScreen({ onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): React.JSX.Element {
+function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): React.JSX.Element {
   // Segmentation tuning variables (change these and rebuild as needed)
   const MASK_THRESHOLD = 0.7; // 0.0 to 1.0 (lowered for better edge detection)
   const MASK_EDGE_BLUR_PX = 4; // Reduced blur for sharper edges
@@ -110,11 +111,11 @@ function AIImageScreen({ onBack = () => {}, onGenerate, isLoading }: AIImageScre
   const frameScrollRef = useRef<HTMLDivElement>(null);
 
   const backgroundList = useMemo(() => {
-    const backgrounds = import.meta.glob('../../../assets/Frames/AI_Frame/*.{jpg,jpeg,png,webp}', {
+    const backgrounds = import.meta.glob('../../../assets/Frames/WildLife/*.{jpg,jpeg,png,webp}', {
       eager: true,
-      as: 'url'
+      query: '?url'
     });
-    return Object.values(backgrounds).sort();
+    return Object.values(backgrounds).map((bg: any) => bg.default || bg).sort();
   }, []);
 
   // Function to load a new background (memoized)
@@ -588,7 +589,7 @@ function AIImageScreen({ onBack = () => {}, onGenerate, isLoading }: AIImageScre
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <h1 className="font-[Arial] text-[10rem] uppercase tracking-[2px] text-[#f0e6ff] m-0">Creativity</h1>
+        <h1 className="font-[Arial] text-[10rem] uppercase tracking-[2px] text-[#f0e6ff] m-0">{category}</h1>
         <div style={{ width: 44 }} />
       </div>
 
@@ -596,11 +597,9 @@ function AIImageScreen({ onBack = () => {}, onGenerate, isLoading }: AIImageScre
       <div className="flex flex-col items-center gap-5 px-[50px] py-4 mt-[20px] shrink-0">
         {/* Shutter button */}
         <button
-          className="w-[150px] h-[150px] rounded-full p-[5px] transition-all duration-300 disabled:opacity-50 active:scale-[0.96]"
+          className="w-[150px] h-[150px] rounded-full p-[5px] transition-all duration-300 disabled:opacity-50 active:scale-[0.96] shutter-btn-animate"
           style={{
-            border: '4px solid #a855f7',
             background: 'linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)',
-            boxShadow: '0 0 28px rgba(168,85,247,0.45)',
           }}
           onClick={startPhotoProcess}
           disabled={timer > 0 || isProcessingCapture}
@@ -611,8 +610,8 @@ function AIImageScreen({ onBack = () => {}, onGenerate, isLoading }: AIImageScre
         {/* Timer dropdown */}
         <div className="relative mt-[50px]" ref={dropdownRef}>
           <button
-            className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[rgba(168,85,247,0.55)] bg-[rgba(19,13,30,0.6)] text-[#f0e6ff] font-black transition-all duration-300 hover:bg-[rgba(168,85,247,0.18)] hover:text-white disabled:opacity-50"
-            style={{ boxShadow: '0 0 8px rgba(168,85,247,0.18)' }}
+            className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.6)] text-[#f0e6ff] font-black transition-all duration-300 hover:bg-[rgba(168,85,247,0.18)] hover:text-white disabled:opacity-50"
+            style={{ boxShadow: '0 0 8px rgba(168,85,247,0.18)', border: '1px solid #a855f7' }}
             onClick={() => setIsCountdownDropdownOpen(!isCountdownDropdownOpen)}
             disabled={timer > 0 || isProcessingCapture}
           >
@@ -620,7 +619,7 @@ function AIImageScreen({ onBack = () => {}, onGenerate, isLoading }: AIImageScre
             <strong className="text-[2rem]">{selectedCountdown}s</strong>
           </button>
           {isCountdownDropdownOpen && (
-            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)]" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
+            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)] overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
               {[5, 10, 15, 20, 25, 30].map(v => (
                 <button
                   key={v}

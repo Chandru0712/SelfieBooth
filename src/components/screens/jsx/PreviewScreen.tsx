@@ -68,10 +68,13 @@ export const PreviewScreen = ({
           />
           {/* QR Code after upload */}
           {uploadedImageUrl && !isProcessing && (
-            <div className="flex justify-center items-center mt-[50px] pb-[60px] w-full">
+            <div className="flex flex-col justify-center items-center mt-[50px] pb-[60px] w-full gap-6">
               <div className="qr-canvas-wrapper" style={{ padding: 15 }}>
                 <QRCodeCanvas value={uploadedImageUrl} size={512} level="H" includeMargin={true} />
               </div>
+              <h2 className="text-[2.5rem] font-bold tracking-wide text-[#f0e6ff] text-center" style={{ textShadow: '0 4px 20px rgba(168,85,247,0.6)' }}>
+                Scan QR Code to Download
+              </h2>
             </div>
           )}
         </div>
@@ -80,7 +83,7 @@ export const PreviewScreen = ({
         <div className="absolute top-0 left-0 right-0 flex justify-center items-center gap-8 px-5 py-10 bg-[rgba(12,8,18,0.65)]" style={{ backdropFilter: 'blur(8px)' }}>
           <button
             className={btnRetake}
-            style={{ boxShadow: '0 0 16px rgba(168,85,247,0.35)' }}
+            style={{ boxShadow: '0 0 16px rgba(168,85,247,0.35)', border: '1px solid #a855f7' }}
             onClick={handleRetake}
             disabled={isProcessing}
           >
