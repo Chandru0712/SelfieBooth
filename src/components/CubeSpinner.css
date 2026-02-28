@@ -1,0 +1,155 @@
+.advanced-spinner-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  z-index: 10;
+  width: 260px;
+  height: 260px;
+}
+
+.advanced-spinner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Core glowing orb */
+.spinner-core {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(circle, #f0e6ff 0%, #e040fb 40%, rgba(168,85,247,0.8) 80%, transparent 100%);
+  border-radius: 50%;
+  box-shadow: 0 0 30px #e040fb, 0 0 80px #a855f7, inset 0 0 15px #fff;
+  animation: pulse-core 2s ease-in-out infinite alternate;
+  z-index: 5;
+}
+
+/* Soft pulsating aura behind the core */
+.spinner-core-glow {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle, rgba(168,85,247,0.5) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: pulse-aura 3s ease-in-out infinite alternate;
+  z-index: 4;
+}
+
+/* Outer rotating rings */
+.spinner-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 4px solid transparent;
+}
+
+/* Outer Ring */
+.spinner-ring:nth-child(1) {
+  width: 240px;
+  height: 240px;
+  border-top: 4px solid #a855f7;
+  border-right: 4px solid rgba(168, 85, 247, 0.1);
+  border-bottom: 4px solid transparent;
+  border-left: 4px solid transparent;
+  animation: spin 2.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+  box-shadow: 0 -10px 30px -5px rgba(168, 85, 247, 0.5);
+  z-index: 1;
+}
+
+/* Middle Ring */
+.spinner-ring:nth-child(2) {
+  width: 180px;
+  height: 180px;
+  border-bottom: 4px solid #e040fb;
+  border-left: 4px solid rgba(224, 64, 251, 0.1);
+  border-top: 4px solid transparent;
+  border-right: 4px solid transparent;
+  animation: spin 1.8s linear infinite reverse;
+  box-shadow: 0 10px 20px -5px rgba(224, 64, 251, 0.7);
+  z-index: 2;
+}
+
+/* Inner Ring */
+.spinner-ring:nth-child(3) {
+  width: 120px;
+  height: 120px;
+  border-top: 3px solid #7e22ce;
+  border-bottom: 3px solid #7e22ce;
+  animation: spin-wobble 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  box-shadow: inset 0 0 15px rgba(126, 34, 206, 0.4), 0 0 15px rgba(126, 34, 206, 0.4);
+  z-index: 3;
+}
+
+/* Floating particles inside the spinner */
+.spinner-particles {
+  position: absolute;
+  width: 250px;
+  height: 250px;
+  animation: spin 8s linear infinite;
+  z-index: 6;
+}
+
+.spinner-particles::before,
+.spinner-particles::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 15px #fff, 0 0 25px #e040fb, 0 0 35px #a855f7;
+}
+
+.spinner-particles::before {
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: pulse-particle 1.5s infinite alternate;
+}
+
+.spinner-particles::after {
+  bottom: 20%;
+  right: 15%;
+  width: 6px;
+  height: 6px;
+  animation: pulse-particle 2.2s infinite alternate-reverse;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes spin-wobble {
+  0% { transform: rotate(0deg) scale(1) skewX(0deg); }
+  33% { transform: rotate(120deg) scale(1.05) skewX(5deg); }
+  66% { transform: rotate(240deg) scale(0.95) skewX(-5deg); }
+  100% { transform: rotate(360deg) scale(1) skewX(0deg); }
+}
+
+@keyframes pulse-core {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+    box-shadow: 0 0 20px #e040fb, 0 0 40px #a855f7, inset 0 0 10px #fff;
+  }
+  100% {
+    transform: scale(1.15);
+    opacity: 1;
+    box-shadow: 0 0 50px #e040fb, 0 0 90px #a855f7, inset 0 0 20px #fff;
+  }
+}
+
+@keyframes pulse-aura {
+  0% { transform: scale(1); opacity: 0.3; }
+  100% { transform: scale(2.5); opacity: 0.8; }
+}
+
+@keyframes pulse-particle {
+  0% { transform: scale(0.5); opacity: 0.5; }
+  100% { transform: scale(1.8); opacity: 1; filter: brightness(1.5); }
+}
