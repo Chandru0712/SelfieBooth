@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { ImageData } from '../../../types';
 import { uploadImageAndGenerateQR } from '../../../utils/apiService.ts';
+import ParticleBackground from '../../ParticleBackground';
 
 interface PreviewScreenProps {
   imageData: ImageData | null;
@@ -49,16 +50,19 @@ export const PreviewScreen = ({
   const btnRetake  = `${btnBase} bg-[rgba(19,13,30,0.70)] text-[#f0e6ff] border-2 border-[#a855f7] hover:bg-[rgba(168,85,247,0.18)] hover:border-[#e040fb] hover:text-white hover:-translate-y-1 hover:scale-[1.05] disabled:opacity-50`;
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col bg-[rgba(12,8,18,0.94)]" style={{ backdropFilter: 'blur(20px)' }}>
+    <div className="fixed inset-0 z-[200] flex flex-col bg-[#0c0812]" style={{ backdropFilter: 'blur(20px)' }}>
+      {/* particle layer; id can be omitted now, the component generates one automatically */}
+      <ParticleBackground />
+
       {/* Header */}
-      <div className="flex items-center justify-between px-8 py-5 bg-gradient-to-r from-[rgba(120,40,200,0.12)] to-[rgba(60,0,120,0.16)] border-b border-[rgba(168,85,247,0.20)] shrink-0">
+      <div className="relative z-10 flex items-center justify-between px-8 py-5 bg-gradient-to-r from-[rgba(120,40,200,0.12)] to-[rgba(60,0,120,0.16)] border-b border-[rgba(168,85,247,0.20)] shrink-0">
         <div className="w-[125px]" />
         <h1 className="font-[Arial] text-[6rem] uppercase tracking-[2px] text-[#f0e6ff] m-0">Preview</h1>
         <div className="w-[125px]" />
       </div>
 
       {/* Body */}
-      <div className="relative flex-1 flex flex-col overflow-hidden">
+      <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
         {/* Image */}
         <div className="flex-1 flex flex-col items-center overflow-auto px-3 pt-[220px]">
           <img
@@ -80,7 +84,7 @@ export const PreviewScreen = ({
         </div>
 
         {/* Fixed action bar at top */}
-        <div className="absolute top-0 left-0 right-0 flex justify-center items-center gap-8 px-5 py-10 bg-[rgba(12,8,18,0.65)]" style={{ backdropFilter: 'blur(8px)' }}>
+        <div className="absolute top-0 left-0 right-0 flex justify-center items-center gap-8 px-5 py-10" style={{ backdropFilter: 'blur(8px)' }}>
           <button
             className={btnRetake}
             style={{ boxShadow: '0 0 16px rgba(168,85,247,0.35)', border: '1px solid #a855f7' }}

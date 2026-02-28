@@ -1,0 +1,68 @@
+.particle-container {
+  position: absolute;
+  left: -51%;
+  top: -51%;
+  width: 202%;
+  height: 202%;
+  transform: none;
+  z-index: 0;
+}
+
+.particle-container, .particle-container .pg-canvas {
+  pointer-events: none;
+}
+
+/* apply gradient for any element marked as a background layer */
+.particle-container.background {
+  background: linear-gradient(45deg, #3f3251 2%, #002025 100%);
+  z-index: 1;
+}
+
+/* foreground layers sit above normal content */
+.particle-container.foreground {
+  z-index: 2;
+}
+
+/* keep the original id selectors for legacy references */
+#particles-background {
+  background: linear-gradient(45deg, #3f3251 2%, #002025 100%);
+  z-index: 1;
+}
+
+#particles-foreground {
+  z-index: 2;
+}
+
+.pg-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .particle-container {
+    left: -51%;
+    top: -51%;
+    width: 202%;
+    height: 202%;
+  }
+}
+
+/* particles used inside transient overlays (processing) should fill the overlay */
+.processing-particles {
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  transform: none !important;
+  z-index: 0 !important;
+}
+
+.processing-particles .pg-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}

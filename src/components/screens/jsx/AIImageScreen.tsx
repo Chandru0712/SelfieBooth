@@ -4,6 +4,8 @@ import { SelfieSegmentation, Results } from '@mediapipe/selfie_segmentation';
 import { Camera } from '@mediapipe/camera_utils';
 import { v4 as uuidv4 } from 'uuid';
 import PreviewScreen from './PreviewScreen';
+import ParticleBackground from '../../ParticleBackground';
+import CubeSpinner from '../../CubeSpinner';
 
 interface ImglyModule {
   default?: (blob: Blob, config: any) => Promise<Blob>;
@@ -577,15 +579,18 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   };
 
   return (
-    <div className="flex flex-col w-screen h-screen bg-[#0c0812] overflow-hidden">
+    <div className="flex flex-col w-screen h-screen overflow-hidden relative">
+      {/* keep the default background layer */}
+      <ParticleBackground />
 
       {/* ── HEADER ── */}
-      <div className="flex items-center justify-between px-8 py-5 bg-gradient-to-r from-[rgba(120,40,200,0.12)] to-[rgba(60,0,120,0.16)] border-b border-[rgba(168,85,247,0.20)] shrink-0">
+      <div className="relative z-10 flex items-center justify-between px-8 py-5 bg-gradient-to-r from-[rgba(120,40,200,0.12)] to-[rgba(60,0,120,0.16)] border-b border-[rgba(168,85,247,0.20)] shrink-0">
         <button
-          className="w-[125px] h-[125px] rounded-full flex items-center justify-center text-[#f0e6ff] bg-[rgba(60,0,120,0.5)] border-2 border-[rgba(168,85,247,0.35)] transition-all duration-300 hover:bg-[rgba(168,85,247,0.22)] hover:text-white"
+          className="w-[125px] h-[125px] rounded-full flex items-center justify-center text-[#f0e6ff] bg-[rgba(60,0,120,0.5)] border-[4px] border-[#a855f7] transition-all duration-300 hover:bg-[rgba(168,85,247,0.22)] hover:text-white"
+          style={{ boxShadow: '0 0 15px rgba(168,85,247,0.4), inset 0 0 10px rgba(168,85,247,0.4)' }}
           onClick={onBack}
         >
-          <svg width="75" height="75" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ filter: 'drop-shadow(0 0 5px rgba(224,64,251,0.8))' }}>
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
@@ -594,7 +599,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       </div>
 
       {/* ── CONTROLS ── */}
-      <div className="flex flex-col items-center gap-5 px-[50px] py-4 mt-[20px] shrink-0">
+      <div className="relative z-10 flex flex-col items-center gap-5 px-[50px] py-4 mt-[20px] shrink-0">
         {/* Shutter button */}
         <button
           className="w-[150px] h-[150px] rounded-full p-[5px] transition-all duration-300 disabled:opacity-50 active:scale-[0.96] shutter-btn-animate"
@@ -635,7 +640,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       </div>
 
       {/* ── CAMERA PREVIEW ── */}
-      <div className="flex items-start justify-center relative px-[10px] mt-[10px]">
+      <div className="relative z-10 flex items-start justify-center relative px-[10px] mt-[10px]">
         <div style={{ width: previewDimensions.width, height: previewDimensions.height, position: 'relative', margin: '0 auto', flexShrink: 0 }}>
           <div className="relative rounded-[24px] overflow-hidden bg-black w-full h-full" style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }}>
             {/* Hidden Webcam */}
@@ -654,14 +659,6 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
             {isFlashing && <div className="screen-flash" />}
-            {/* Processing overlay */}
-            {isProcessingCapture && (
-              <div className="fixed inset-0 z-[10005] flex items-center justify-center flex-col bg-[#0c0812]">
-                <div className="spinner" />
-                <div className="text-white text-[5rem] mt-5 font-bold">Processing...</div>
-                {/* <div className="text-white text-[2rem] mt-2.5">Background Mask</div> */}
-              </div>
-            )}
           </div>
           {timer > 0 && <div key={timer} className="countdown-text">{timer}</div>}
         </div>
@@ -669,7 +666,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
       {/* ── FRAME / BACKGROUND SELECTOR ── */}
       <div
-        className="mt-[50px] mb-[50px] min-h-[160px] w-full overflow-x-auto"
+        className="relative z-10 mt-[50px] mb-[50px] min-h-[160px] w-full overflow-x-auto"
         style={{ scrollbarWidth: 'none', cursor: isFrameDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
         ref={frameScrollRef}
         onMouseDown={handleFrameDragStart}
@@ -693,6 +690,16 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
         </div>
       </div>
 
+      {/* Processing overlay full screen */}
+      {isProcessingCapture && (
+        <div className="fixed inset-0 z-[10005] flex items-center justify-center flex-col bg-[#0c0812]" style={{ backdropFilter: 'blur(20px)' }}>
+          {/* particles inside the processing overlay (foreground style) */}
+          <ParticleBackground isBackground={false} className="processing-particles" />
+          <CubeSpinner />
+          <div className="text-white text-[5rem] mt-5 font-bold tracking-widest z-10 pt-20" style={{ textShadow: '0 0 20px rgba(168,85,247,0.8)' }}>PROCESSING...</div>
+        </div>
+      )}
+
       {/* Hidden status readouts */}
       {processingTimeMs !== null && <p className="hidden">Processed in {(processingTimeMs / 1000).toFixed(2)}s</p>}
       {captureError && <p className="hidden">{captureError}</p>}
@@ -700,7 +707,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       <PreviewScreen
         imageData={capturePreviewBlob ? {
           url: previewUrl || '',
-          blob: capturePreviewBlob,
+          blob: capturePreviewBlob, 
           metadata: {
             id: uuidv4(),
             frameId: '',
