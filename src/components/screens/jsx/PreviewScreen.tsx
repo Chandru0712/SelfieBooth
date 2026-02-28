@@ -1,24 +1,7 @@
-/**
- * ================================================================================
- * FILE: PreviewScreen.tsx - COMMON CAPTURE PREVIEW & UPLOAD INTERFACE
- * ================================================================================
- * 
- * Central preview component for all capture screens (AIImageScreen, CaptureScreen)
- * Handles:
- * - Image preview and display
- * - Retake/Continue workflow
- * - Image upload to API
- * - Inline QR code generation and display using qrcode.react
- * - Print and Share functionality
- * 
- * ================================================================================
- */
-
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { ImageData } from '../../../types';
-import { uploadImageAndGenerateQR, downloadImageFromUrl } from '../../../utils/apiService.ts';
-import '../styles/PreviewScreen.css';
+import { uploadImageAndGenerateQR } from '../../../utils/apiService.ts';
 
 interface PreviewScreenProps {
   imageData: ImageData | null;
@@ -32,353 +15,90 @@ interface PreviewScreenProps {
 export const PreviewScreen = ({
   imageData,
   isVisible = false,
-  isLoading = false,
   onRetake = () => {},
-  onContinue = () => {},
-  showAsOverlay = true,
+  onContinue: _onContinue = () => {},
 }: PreviewScreenProps) => {
-  // ========== STATE MANAGEMENT ==========
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-  const qrRef = useRef<HTMLDivElement>(null);
 
-  // Cleanup on unmount or when imageData changes
   useEffect(() => {
     return () => {
-      if (imageData?.url) {
-        try {
-          URL.revokeObjectURL(imageData.url);
-        } catch {
-          // Ignore cleanup errors
-        }
-      }
+      if (imageData?.url) { try { URL.revokeObjectURL(imageData.url); } catch { /* ignore */ } }
     };
   }, [imageData?.url]);
 
-  if (!isVisible || !imageData) {
-    return null;
-  }
+  if (!isVisible || !imageData) return null;
 
-  // ========== UPLOAD & QR LOGIC ==========
   const handleContinue = async () => {
     try {
-      setIsProcessing(true);
-      setError(null);
-      setUploadedImageUrl(null);
-
-      console.log('📤 Starting upload...', {
-        fileName: imageData.metadata.fileName,
-        blobSize: imageData.blob.size,
-      });
-
-      // Upload image and get image URL
-      const uploadResult = await uploadImageAndGenerateQR(
-        imageData.blob,
-        imageData.metadata.fileName
-      );
-
-      console.log('📥 Upload response received:', uploadResult);
-
-      if (!uploadResult.success) {
-        const errorMsg = uploadResult.error || 'Upload failed. Please try again.';
-        console.error('❌ Upload failed:', errorMsg);
-        setError(errorMsg);
-        return;
-      }
-
-      if (!uploadResult.imageUrl) {
-        console.warn('⚠️ No image URL in upload response');
-        setError('Upload successful but no image URL returned');
-        return;
-      }
-
-      console.log('✅ Upload successful! Image URL:', uploadResult.imageUrl);
+      setIsProcessing(true); setError(null); setUploadedImageUrl(null);
+      const uploadResult = await uploadImageAndGenerateQR(imageData.blob, imageData.metadata.fileName);
+      if (!uploadResult.success) { setError(uploadResult.error || 'Upload failed. Please try again.'); return; }
+      if (!uploadResult.imageUrl) { setError('Upload successful but no image URL returned'); return; }
       setUploadedImageUrl(uploadResult.imageUrl);
-    } catch (err) {
-      console.error('Failed to upload image:', err);
-      setError('Failed to upload image. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
+    } catch { setError('Failed to upload image. Please try again.'); }
+    finally { setIsProcessing(false); }
   };
 
-  const handlePrint = () => {
-    try {
-      const printWindow = window.open('', '', 'width=800,height=600');
-      if (!printWindow) {
-        setError('Failed to open print window');
-        return;
-      }
+  const handleRetake = () => { setError(null); setUploadedImageUrl(null); onRetake(); };
 
-      const url = URL.createObjectURL(imageData.blob);
+  /* ─── Button styles ─── */
+  const btnBase = "inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-[30px] font-bold text-[22px] uppercase tracking-[0.5px] transition-all duration-300 min-w-[280px] text-center";
+  const btnPrimary = `${btnBase} bg-gradient-to-r from-[#a855f7] to-[#7e22ce] text-white border-none disabled:opacity-50 hover:-translate-y-0.5 hover:scale-[1.04]`;
+  const btnRetake  = `${btnBase} bg-[rgba(19,13,30,0.70)] text-[#f0e6ff] border-2 border-[#a855f7] hover:bg-[rgba(168,85,247,0.18)] hover:border-[#e040fb] hover:text-white hover:-translate-y-1 hover:scale-[1.05] disabled:opacity-50`;
 
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Print Photo</title>
-            <style>
-              body { margin: 0; padding: 20px; }
-              img { max-width: 100%; height: auto; }
-              @media print {
-                body { margin: 0; padding: 0; }
-              }
-            </style>
-          </head>
-          <body onload="window.print(); window.close();">
-            <img src="${url}" alt="Photo" />
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-    } catch (err) {
-      console.error('Print failed:', err);
-      setError('Failed to print image');
-    }
-  };
-
-  const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        // Native share
-        const file = new File([imageData.blob], imageData.metadata.fileName, {
-          type: 'image/png',
-        });
-        await navigator.share({
-          title: 'My Selfie',
-          text: 'Check out my selfie!',
-          files: [file],
-        });
-      } else {
-        // Fallback: copy to clipboard
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            'image/png': imageData.blob,
-          }),
-        ]);
-        alert('Photo copied to clipboard!');
-      }
-    } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        console.error('Share failed:', err);
-        setError('Share not available on this device');
-      }
-    }
-  };
-
-  const downloadQRCode = () => {
-    if (!qrRef.current) return;
-    
-    const canvas = qrRef.current.querySelector('canvas') as HTMLCanvasElement;
-    if (!canvas) return;
-    
-    const url = canvas.toDataURL('image/png');
-    downloadImageFromUrl(url, 'qrcode.png');
-  };
-
-  // EVENT HANDLERS
-  const handleRetake = () => {
-    setError(null);
-    setUploadedImageUrl(null);
-    if (onRetake) {
-      onRetake();
-    }
-  };
-
-  // ========== RENDER LOGIC ==========
-  if (showAsOverlay) {
-    // Overlay mode - upload screen with QR code
-    return (
-      <div className="capture-preview-overlay">
-        {/* Top Header */}
-        <div className="layout-header">
-          <div className="header-spacer" />
-          <h1 className="category-title">Preview</h1>
-          <div className="header-spacer" /> 
-        </div>
-
-        {/* Main Interface -> Keep image fixed in background, action panel fixed at bottom */}
-        <div className="flex-col-full main-interface-container">
-          
-          {/* Always show the preview image spanning the available height */}
-          <div className="preview-image-wrapper image-bounds-padding-top">
-            <img
-              ref={imgRef}
-              src={uploadedImageUrl || imageData.url}
-              alt="Captured preview"
-              className="preview-image-inner"
-            />
-            
-            {/* Bottom QR Code (Only visible after successful upload, no text or retake button) */}
-            {uploadedImageUrl && !isProcessing && (
-              <div className="qr-bottom-container">
-                <div className="qr-canvas-wrapper large qr-padded" ref={qrRef}>
-                  <QRCodeCanvas
-                    value={uploadedImageUrl}
-                    size={512}
-                    level="H"
-                    includeMargin={true}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Top panel with blur effect containing dynamic actions */}
-          <div className="bottom-blur-panel panel-fixed-top">
-            <button
-              className="btn btn-secondary btn-large-action secondary"
-              onClick={handleRetake}
-              disabled={isProcessing}
-            >
-              ↻ Retake
-            </button>
-
-            <button
-              className="btn btn-primary btn-large-action primary"
-              onClick={handleContinue}
-              disabled={isProcessing || !!uploadedImageUrl}
-            >
-              {isProcessing ? 'Generating QR Code...' : '✓ Click & Get QR'}
-            </button>
-          </div>
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="error-toast">
-            {error}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Regular preview screen mode
   return (
-    <div className="preview-screen">
-      {/* Top Header */}
-      <div className="layout-header">
-        <div className="header-spacer" />
-        <h1 className="category-title">Preview</h1>
-        <div className="header-spacer" /> 
+    <div className="fixed inset-0 z-[200] flex flex-col bg-[rgba(12,8,18,0.94)]" style={{ backdropFilter: 'blur(20px)' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-8 py-5 bg-gradient-to-r from-[rgba(120,40,200,0.12)] to-[rgba(60,0,120,0.16)] border-b border-[rgba(168,85,247,0.20)] shrink-0">
+        <div className="w-[125px]" />
+        <h1 className="font-[Arial] text-[6rem] uppercase tracking-[2px] text-[#f0e6ff] m-0">Preview</h1>
+        <div className="w-[125px]" />
       </div>
 
-      {/* Main preview area */}
-      <div className="preview-main">
-        <div className="preview-image-container">
+      {/* Body */}
+      <div className="relative flex-1 flex flex-col overflow-hidden">
+        {/* Image */}
+        <div className="flex-1 flex flex-col items-center overflow-auto px-3 pt-[220px]">
           <img
-            ref={imgRef}
-            src={imageData.url}
-            alt="Captured photo"
-            className="preview-image"
+            src={uploadedImageUrl || imageData.url}
+            alt="Captured preview"
+            className="w-full max-h-[50vh] object-contain object-top mt-[3%]"
           />
-
-          {isProcessing && (
-            <div className="preview-loading">
-              <div className="spinner" />
+          {/* QR Code after upload */}
+          {uploadedImageUrl && !isProcessing && (
+            <div className="flex flex-col justify-center items-center mt-[50px] pb-[60px] w-full gap-6">
+              <div className="qr-canvas-wrapper" style={{ padding: 15 }}>
+                <QRCodeCanvas value={uploadedImageUrl} size={512} level="H" includeMargin={true} />
+              </div>
+              <h2 className="text-[2.5rem] font-bold tracking-wide text-[#f0e6ff] text-center" style={{ textShadow: '0 4px 20px rgba(168,85,247,0.6)' }}>
+                Scan QR Code to Download
+              </h2>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Action buttons (Only show if not yet uploaded) */}
-      {!uploadedImageUrl && (
-        <div className="preview-actions">
+        {/* Fixed action bar at top */}
+        <div className="absolute top-0 left-0 right-0 flex justify-center items-center gap-8 px-5 py-10 bg-[rgba(12,8,18,0.65)]" style={{ backdropFilter: 'blur(8px)' }}>
           <button
-            className="btn btn-secondary btn-large-action secondary"
+            className={btnRetake}
+            style={{ boxShadow: '0 0 16px rgba(168,85,247,0.35)', border: '1px solid #a855f7' }}
             onClick={handleRetake}
             disabled={isProcessing}
           >
             ↻ Retake
           </button>
-
-          <div className="export-menu-wrapper">
-            <button
-              className="btn btn-primary btn-large-action primary"
-              onClick={handleContinue}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <>
-                  <span className="spinner" style={{ display: 'inline-block' }} />
-                  <span>Uploading...</span>
-                </>
-              ) : (
-                '✓ Upload & Get QR'
-              )}
-            </button>
-
-            <div className="export-menu" role="menu">
-              <button
-                className="export-option"
-                onClick={handlePrint}
-                role="menuitem"
-                disabled={isProcessing}
-              >
-                <span className="export-icon">🖨️</span>
-                <span>Print</span>
-              </button>
-
-              <button
-                className="export-option"
-                onClick={handleShare}
-                role="menuitem"
-                disabled={isProcessing}
-              >
-                <span className="export-icon">📲</span>
-                <span>Share</span>
-              </button>
-            </div>
-          </div>
+          <button className={btnPrimary} onClick={handleContinue} disabled={isProcessing || !!uploadedImageUrl}>
+            {isProcessing ? 'Generating QR Code…' : '✓ Click & Get QR'}
+          </button>
         </div>
-      )}
+      </div>
 
-      {/* Error message */}
+      {/* Error toast */}
       {error && (
-        <div className="preview-info error-text" aria-live="polite">
-          <p className="info-text">⚠️ {error}</p>
-        </div>
-      )}
-
-      {/* Photo info */}
-      {uploadedImageUrl && (
-        <div className="upload-success-panel">
-          <p className="success-title">✅ Upload Successful!</p>
-          <div className="qr-controls">
-            <div className="qr-canvas-wrapper large" ref={qrRef}>
-              <QRCodeCanvas value={uploadedImageUrl} size={250} level="H" includeMargin={true} />
-            </div>
-            <button
-              onClick={handleRetake}
-              className="btn btn-secondary btn-retake-medium"
-            >
-              ↻ Retake
-            </button>
-          </div>
-          <div className="panel-actions">
-            <button
-              onClick={handlePrint}
-              className="btn btn-secondary"
-            >
-              🖨️ Print
-            </button>
-            
-            <button
-              onClick={handleShare}
-              className="btn btn-secondary"
-            >
-              📲 Share
-            </button>
-
-            <button
-              onClick={downloadQRCode}
-              className="btn-qr-download"
-            >
-              📥 Download QR
-            </button>
-          </div>
+        <div className="fixed bottom-[200px] left-1/2 -translate-x-1/2 bg-[rgba(239,68,68,0.9)] text-white px-6 py-3 rounded-lg text-sm z-[2001] max-w-[80%]">
+          {error}
         </div>
       )}
     </div>

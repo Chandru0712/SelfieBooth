@@ -23,8 +23,7 @@
  * ================================================================================
  */
 
-import { useState, useEffect, ReactElement } from 'react';
-import './App.css';
+import { useState, useEffect, useRef, ReactElement } from 'react';
 
 // ========== 1.0 IMPORTS - SCREENS ==========
 // Import screens
@@ -34,19 +33,16 @@ import { CaptureScreen } from './components/screens/jsx/CaptureScreen';
 import { PreviewScreen } from './components/screens/jsx/PreviewScreen';
 import AIImageScreen from './components/screens/jsx/AIImageScreen';
 
-// ========== 1.1 IMPORTS - HOOKS & SERVICES ==========
-// Import hooks
-import { useSession } from './hooks/useSession';
 
 // ========== 1.2 IMPORTS - TYPES ==========
 import type { ImageData, Frame } from './types';
 
 // ========== 1.3 IMPORTS - DYNAMIC ASSETS ==========
 // Dynamically import frames
-const childrenFramesRaw = import.meta.glob('./assets/Frames/Children/*.png', { eager: true, query: '?url' });
-const adultFramesRaw = import.meta.glob('./assets/Frames/Adult/*.png', { eager: true, query: '?url' });
-const proverbFramesRaw = import.meta.glob('./assets/Frames/Proverb/*.png', { eager: true, query: '?url' });
-const collageFramesRaw = import.meta.glob('./assets/Frames/Collage/*.png', { eager: true, query: '?url' });
+const childrenFramesRaw = import.meta.glob('./assets/Frames/Children/*.{png,webp}', { eager: true, query: '?url' });
+const adultFramesRaw = import.meta.glob('./assets/Frames/Adult/*.{png,webp}', { eager: true, query: '?url' });
+const proverbFramesRaw = import.meta.glob('./assets/Frames/Proverb/*.{png,webp}', { eager: true, query: '?url' });
+const collageFramesRaw = import.meta.glob('./assets/Frames/Creative/*.{png,webp}', { eager: true, query: '?url' });
 // ========== 2.0 FRAME DATA LOADING & FORMATTING ==========
 
 /**
@@ -54,7 +50,7 @@ const collageFramesRaw = import.meta.glob('./assets/Frames/Collage/*.png', { eag
  */
 const formatFrames = (rawGlob: Record<string, any>, categoryName: string): Frame[] => {
   return Object.entries(rawGlob).map(([path, module]) => {
-    const fileName = path.split('/').pop()?.replace('.png', '') || 'unknown';
+    const fileName = path.split('/').pop()?.replace(/\.[^.]+$/, '') || 'unknown';
     const imageUrl = (module as any).default || (module as any);
     return {
       id: `${categoryName}-${fileName}`,
@@ -82,6 +78,35 @@ type ScreenType = typeof SCREENS[keyof typeof SCREENS];
  * Main App Component - Screen flow orchestrator
  */
 function App(): ReactElement {
+  // ========== KIOSK: DISABLE PINCH-ZOOM & LONG-PRESS (SWIPE/SCROLL ALLOWED) ==========
+  useEffect(() => {
+    /**
+     * Block context menu — prevents long-press popup on touch devices
+     * (e.g. "Copy", "Open link", "Save image" menus).
+     */
+    const blockContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
+    /**
+     * Block gesturestart / gesturechange — prevents native
+     * pinch-to-zoom on Safari/iOS (non-standard but widely supported).
+     */
+    const blockGesture = (e: Event) => {
+      e.preventDefault();
+    };
+
+    // Attach blockers
+    document.addEventListener('contextmenu', blockContextMenu);
+    document.addEventListener('gesturestart', blockGesture);
+    document.addEventListener('gesturechange', blockGesture);
+
+    return () => {
+      document.removeEventListener('contextmenu', blockContextMenu);
+      document.removeEventListener('gesturestart', blockGesture);
+      document.removeEventListener('gesturechange', blockGesture);
+    };
+  }, []); // Run once on mount
   // ========== SCREEN STATE ==========
   const [currentScreen, setCurrentScreen] = useState<ScreenType>(SCREENS.WELCOME);
   const [selectedCategory, setSelectedCategory] = useState<string>('children');
@@ -92,10 +117,11 @@ function App(): ReactElement {
   
   // ========== PHOTO STATE ==========
   const [capturedImageData, setCapturedImageData] = useState<ImageData | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
 
-  // Hooks
-  const session = useSession();
+  // ========== INACTIVITY TIMER ==========
+  // 30 minutes in milliseconds
+  const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
    * Load frames when category changes
@@ -113,8 +139,8 @@ function App(): ReactElement {
       case 'proverb':
         categoryFrames = formatFrames(proverbFramesRaw, 'proverb');
         break;
-      case 'collage':
-        categoryFrames = formatFrames(collageFramesRaw, 'collage');
+      case 'creative':
+        categoryFrames = formatFrames(collageFramesRaw, 'creative');
         break;
       default:
         categoryFrames = [];
@@ -133,7 +159,7 @@ function App(): ReactElement {
    */
   const handleSelectCategory = (category: string): void => {
     setSelectedCategory(category);
-    if (category === 'blend') {
+    if (category === 'blend' || category === 'wildlife') {
       setCurrentScreen(SCREENS.AI_IMAGE);
     } else {
       setCurrentScreen(SCREENS.CAPTURE);
@@ -141,129 +167,75 @@ function App(): ReactElement {
   };
 
   /**
-   * Handle quick mode (skip category selection)
+   * Handle photo capture — stores image and shows preview
    */
-  const handleQuickMode = (): void => {
-    setCurrentScreen(SCREENS.CAPTURE);
+  const handleCapture = (imageData: ImageData): void => {
+    setCapturedImageData(imageData);
+    setCurrentScreen(SCREENS.PREVIEW);
   };
 
-  /**
-   * Handle photo capture
-   * Creates session and saves to storage
-   */
-  const handleCapture = async (imageData: ImageData): Promise<void> => {
-    try {
-      setIsProcessing(true);
-
-      // Create session if needed
-      let sessionId = session.currentSession?.id;
-      if (!sessionId) {
-        const newSession = await session.createSession({
-          category: selectedCategory,
-        });
-        sessionId = newSession.id;
-      }
-
-      // Skip auto-save, just show preview
-      // await session.savePhoto(imageData.blob, imageData.metadata);
-
-      // Store for preview
-      setCapturedImageData(imageData);
-      
-      // Transition to preview screen
-      setCurrentScreen(SCREENS.PREVIEW);
-    } catch (error) {
-      console.error('Capture failed:', error);
-      alert('Failed to save photo. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  /**
-   * Handle retake - go back to capture
-   */
-  const handleRetake = (): void => {
-    setCapturedImageData(null);
-    setCurrentScreen(SCREENS.CAPTURE);
-  };
-
-  /**
-   * Handle save (already saved to IndexedDB in handleCapture)
-   */
-  const handleSave = (imageData: ImageData): void => {
-    // Photo is already saved, just provide feedback
-    console.log('Photo saved:', imageData);
-  };
-
-  /**
-   * Handle print
-   */
-  const handlePrint = (imageData: ImageData): void => {
-    console.log('Print requested:', imageData);
-    // Printer integration in Phase 3
-  };
-
-  /**
-   * Handle share
-   */
-  const handleShare = (imageData: ImageData): void => {
-    console.log('Share requested:', imageData);
-  };
 
   /**
    * Go back to welcome
    */
   const handleBackToWelcome = (): void => {
     setCurrentScreen(SCREENS.WELCOME);
-    session.endSession();
     setCapturedImageData(null);
   };
 
   /**
+   * Inactivity auto-reset: listen for ANY user activity.
+   * If no activity for 30 minutes, go back to welcome.
+   * Only active when the user is NOT already on the welcome screen.
+   */
+  useEffect(() => {
+    // Don't run timer on the welcome screen itself
+    if (currentScreen === SCREENS.WELCOME) {
+      // Clear any lingering timer when we arrive at welcome
+      if (inactivityTimer.current) {
+        clearTimeout(inactivityTimer.current);
+        inactivityTimer.current = null;
+      }
+      return;
+    }
+
+    const resetTimer = () => {
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      inactivityTimer.current = setTimeout(() => {
+        console.log('⏰ Inactivity timeout — returning to Welcome screen');
+        handleBackToWelcome();
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    // Events that count as user activity
+    const ACTIVITY_EVENTS = [
+      'mousemove',
+      'mousedown',
+      'keydown',
+      'touchstart',
+      'click',
+      'scroll',
+    ] as const;
+
+    // Start the timer immediately and reset on every activity event
+    resetTimer();
+    ACTIVITY_EVENTS.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    return () => {
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      ACTIVITY_EVENTS.forEach(evt => window.removeEventListener(evt, resetTimer));
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentScreen]);
+
+  /**
    * Navigation helpers
    */
-  const handleBackFromSelection = (): void => {
-    setCurrentScreen(SCREENS.WELCOME);
+  const handleAIImageGenerated = (imageData: ImageData): void => {
+    setCapturedImageData(imageData);
+    setCurrentScreen(SCREENS.PREVIEW);
   };
 
-  const handleBackFromAI = (): void => {
-    setCurrentScreen(SCREENS.SELECTION);
-  };
-
-  const handleAIImageGenerated = async (imageData: ImageData): Promise<void> => {
-    try {
-      setIsProcessing(true);
-
-      // Create session if needed
-      let sessionId = session.currentSession?.id;
-      if (!sessionId) {
-        const newSession = await session.createSession({
-          category: selectedCategory,
-        });
-        sessionId = newSession.id;
-      }
-
-      // Store for preview
-      setCapturedImageData(imageData);
-      
-      // Transition to preview screen
-      setCurrentScreen(SCREENS.PREVIEW);
-    } catch (error) {
-      console.error('AI image generation failed:', error);
-      alert('Failed to process AI image. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleBackFromCapture = (): void => {
-    setCurrentScreen(SCREENS.SELECTION);
-  };
-
-  const handleBackFromPreview = (): void => {
-    handleRetake();
-  };
 
   /**
    * Screen rendering
@@ -272,7 +244,20 @@ function App(): ReactElement {
   // (All handlers are defined above in useEffect blocks and callback functions)
 
   // ========== 6.0 SCREEN RENDERING (CONDITIONAL DISPLAY) ==========
+  const getCategoryName = (id: string) => {
+    const names: Record<string, string> = {
+      children: 'Children',
+      adult: 'Adult',
+      proverb: 'Proverb',
+      creative: 'Creative',
+      wildlife: 'Wild Life'
+    };
+    return names[id] || id;
+  };
+
   const renderScreen = (): ReactElement => {
+    const categoryName = getCategoryName(selectedCategory);
+
     switch (currentScreen) {
       case SCREENS.WELCOME:
         return (
@@ -291,22 +276,21 @@ function App(): ReactElement {
       case SCREENS.AI_IMAGE:
         return (
           <AIImageScreen
+            category={categoryName}
             onGenerate={handleAIImageGenerated}
-            onBack={handleBackFromAI}
-            isLoading={isProcessing}
+            onBack={() => setCurrentScreen(SCREENS.SELECTION)}
           />
         );
 
       case SCREENS.CAPTURE:
         return (
           <CaptureScreen
-            category={selectedCategory}
+            category={categoryName}
             frames={frames}
             selectedFrame={selectedFrame}
             onSelectFrame={setSelectedFrame}
             onCapture={handleCapture}
-            onBack={handleBackFromCapture}
-            isLoading={isProcessing}
+            onBack={() => setCurrentScreen(SCREENS.SELECTION)}
           />
         );
 
@@ -316,9 +300,8 @@ function App(): ReactElement {
             imageData={capturedImageData}
             isVisible={true}
             showAsOverlay={true}
-            onRetake={handleBackFromPreview}
+            onRetake={() => { setCapturedImageData(null); setCurrentScreen(SCREENS.CAPTURE); }}
             onContinue={handleBackToWelcome}
-            isLoading={isProcessing}
           />
         ) : (
           <WelcomeScreen onStart={() => setCurrentScreen(SCREENS.SELECTION)} />
@@ -331,7 +314,7 @@ function App(): ReactElement {
 
   // ========== 7.0 JSX RETURN ==========
   return (
-    <div className="app">
+    <div className="relative w-screen h-screen overflow-hidden bg-[#0c0812] text-[#f0e6ff] font-[Outfit]">
       {/* Error boundary handled by main.tsx */}
       {renderScreen()}
     </div>
