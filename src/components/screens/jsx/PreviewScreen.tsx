@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { ImageData } from '../../../types';
 import { uploadImageAndGenerateQR } from '../../../utils/apiService.ts';
-import ParticleBackground from '../../ParticleBackground';
 
 interface PreviewScreenProps {
   imageData: ImageData | null;
@@ -51,8 +50,6 @@ export const PreviewScreen = ({
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-[#0c0812]" style={{ backdropFilter: 'blur(20px)' }}>
-      {/* particle layer; id can be omitted now, the component generates one automatically */}
-      <ParticleBackground />
 
       {/* Header */}
       <div className="relative z-10 flex items-center justify-between px-8 py-5 bg-gradient-to-r from-[rgba(120,40,200,0.12)] to-[rgba(60,0,120,0.16)] border-b border-[rgba(168,85,247,0.20)] shrink-0">

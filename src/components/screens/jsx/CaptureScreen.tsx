@@ -4,7 +4,6 @@ import { v4 as uuidv4 } from "uuid";
 import imageCompression from "browser-image-compression";
 import PreviewScreen from "./PreviewScreen";
 import type { ImageData, Frame } from "../../../types";
-import ParticleBackground from "../../ParticleBackground";
 
 const ZOOM_OPTIONS = [1, 1.25, 1.5, 1.75, 2];
 
@@ -286,8 +285,6 @@ export const CaptureScreen = ({
 
   return (
     <div className="flex flex-col w-screen h-screen overflow-hidden relative">
-      {/* full‑screen particle background - no need to supply an id any more */}
-      <ParticleBackground />
 
       {/* ── HEADER ── */}
       <div className="relative z-10 flex items-center justify-between px-8 py-5 bg-gradient-to-r from-[rgba(120,40,200,0.12)] to-[rgba(60,0,120,0.16)] border-b border-[rgba(168,85,247,0.20)] shrink-0">

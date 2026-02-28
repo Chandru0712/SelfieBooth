@@ -4,7 +4,6 @@ import { SelfieSegmentation, Results } from '@mediapipe/selfie_segmentation';
 import { Camera } from '@mediapipe/camera_utils';
 import { v4 as uuidv4 } from 'uuid';
 import PreviewScreen from './PreviewScreen';
-import ParticleBackground from '../../ParticleBackground';
 import CubeSpinner from '../../CubeSpinner';
 
 interface ImglyModule {
@@ -580,8 +579,6 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
   return (
     <div className="flex flex-col w-screen h-screen overflow-hidden relative">
-      {/* keep the default background layer */}
-      <ParticleBackground />
 
       {/* ── HEADER ── */}
       <div className="relative z-10 flex items-center justify-between px-8 py-5 bg-gradient-to-r from-[rgba(120,40,200,0.12)] to-[rgba(60,0,120,0.16)] border-b border-[rgba(168,85,247,0.20)] shrink-0">
@@ -693,8 +690,6 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       {/* Processing overlay full screen */}
       {isProcessingCapture && (
         <div className="fixed inset-0 z-[10005] flex items-center justify-center flex-col bg-[#0c0812]" style={{ backdropFilter: 'blur(20px)' }}>
-          {/* particles inside the processing overlay (foreground style) */}
-          <ParticleBackground isBackground={false} className="processing-particles" />
           <CubeSpinner />
           <div className="text-white text-[5rem] mt-5 font-bold tracking-widest z-10 pt-20" style={{ textShadow: '0 0 20px rgba(168,85,247,0.8)' }}>PROCESSING...</div>
         </div>

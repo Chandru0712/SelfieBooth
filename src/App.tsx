@@ -120,7 +120,7 @@ function App(): ReactElement {
 
   // ========== INACTIVITY TIMER ==========
   // 30 minutes in milliseconds
-  const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
+  const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
