@@ -9,6 +9,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), basicSsl()],
   server: {
     host: true,
+    https: true,
      // Allows access from network devices
     // WASM files are automatically served with correct MIME type
     proxy: {
