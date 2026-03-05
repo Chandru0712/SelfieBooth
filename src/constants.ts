@@ -18,9 +18,9 @@ export const CAMERA_CONFIG = {
 // ========== API CONFIG ==========
 export const API_CONFIG = {
   UPLOAD_URL: import.meta.env.DEV
-    ? '/api/zooimage/upload.php'
-    : 'https://svsinfotech.in/zooimage/upload.php',
-  UPLOADS_BASE_URL: 'https://svsinfotech.in/zooimage/uploads/',
+    ? '/api/upload.php'
+    : 'https://selfiebooth.aazp.in/upload.php',
+  UPLOADS_BASE_URL: 'https://selfiebooth.aazp.in/uploads/',
   MAX_FILE_SIZE_MB: 10,
   ALLOWED_FORMATS: ['image/jpeg', 'image/png', 'image/webp'],
   UPLOAD_TIMEOUT_MS: 30000,

@@ -13,8 +13,8 @@ export default defineConfig({
      // Allows access from network devices
     // WASM files are automatically served with correct MIME type
     proxy: {
-      '/api/zooimage': {
-        target: 'https://svsinfotech.in',
+      '/api': {
+        target: 'https://selfiebooth.aazp.in/',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         secure: true,
