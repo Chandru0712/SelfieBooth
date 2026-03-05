@@ -23,15 +23,15 @@
  * ================================================================================
  */
 
-import { useState, useEffect, useRef, ReactElement } from 'react';
+import { useState, useEffect, useRef, ReactElement, Suspense, lazy } from 'react';
 
 // ========== 1.0 IMPORTS - SCREENS ==========
-// Import screens
-import { WelcomeScreen } from './components/screens/jsx/WelcomeScreen';
-import { SelectionScreen } from './components/screens/jsx/SelectionScreen';
-import { CaptureScreen } from './components/screens/jsx/CaptureScreen';
-import { PreviewScreen } from './components/screens/jsx/PreviewScreen';
-import AIImageScreen from './components/screens/jsx/AIImageScreen';
+// Import screens lazily to dramatically improve initial load times
+const WelcomeScreen = lazy(() => import('./components/screens/jsx/WelcomeScreen').then(module => ({ default: module.WelcomeScreen })));
+const SelectionScreen = lazy(() => import('./components/screens/jsx/SelectionScreen').then(module => ({ default: module.SelectionScreen })));
+const CaptureScreen = lazy(() => import('./components/screens/jsx/CaptureScreen').then(module => ({ default: module.CaptureScreen })));
+const PreviewScreen = lazy(() => import('./components/screens/jsx/PreviewScreen').then(module => ({ default: module.PreviewScreen })));
+const AIImageScreen = lazy(() => import('./components/screens/jsx/AIImageScreen'));
 
 
 // ========== 1.2 IMPORTS - TYPES ==========
@@ -316,7 +316,9 @@ function App(): ReactElement {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#0c0812] text-[#f0e6ff] font-[Outfit]">
       {/* Error boundary handled by main.tsx */}
-      {renderScreen()}
+      <Suspense fallback={null}>
+        {renderScreen()}
+      </Suspense>
     </div>
   );
 }
