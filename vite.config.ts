@@ -6,6 +6,7 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/SelfieBooth/',
   plugins: [react(), tailwindcss(), basicSsl()],
   server: {
     host: true,
