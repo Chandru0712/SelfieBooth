@@ -1,11 +1,4 @@
 import { useEffect, useState } from 'react';
-import bg1 from '../../../assets/Welcome-01-4k.webp';
-import bg2 from '../../../assets/Welcome-02-4k.webp';
-
-const BACKGROUND_IMAGES = [bg1, bg2];
-
-const SESSION_BACKGROUND: string =
-  BACKGROUND_IMAGES[Math.floor(Math.random() * BACKGROUND_IMAGES.length)];
 
 interface WelcomeScreenProps {
   onStart?: () => void;
@@ -13,31 +6,32 @@ interface WelcomeScreenProps {
 
 export const WelcomeScreen = ({ onStart = () => {} }: WelcomeScreenProps) => {
   const [isAnimating, setIsAnimating] = useState(false);
-  const [isRequestingCamera, setIsRequestingCamera] = useState(false);
-  const currentBg = SESSION_BACKGROUND;
+  const [currentBg, setCurrentBg] = useState<string>('');
 
   useEffect(() => {
     setIsAnimating(true);
-    const preRequestCamera = async () => {
-      try {
-        setIsRequestingCamera(true);
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } },
-          audio: false,
-        });
-        stream.getTracks().forEach(track => track.stop());
-      } catch (error) {
-        console.log('Camera permission not granted yet:', (error as Error).message);
-      } finally {
-        setIsRequestingCamera(false);
+
+    let cancelled = false;
+    const backgroundLoaders = import.meta.glob('../../../assets/Welcome-*-4k.webp', { query: '?url' });
+    const loaders = Object.values(backgroundLoaders) as Array<() => Promise<{ default?: string } | string>>;
+    if (loaders.length === 0) return;
+
+    const loadRandomBackground = async () => {
+      const selectedLoader = loaders[Math.floor(Math.random() * loaders.length)];
+      const loaded = await selectedLoader();
+      if (!cancelled) {
+        setCurrentBg((loaded as { default?: string }).default || (loaded as string));
       }
     };
-    const timeout = setTimeout(preRequestCamera, 500);
-    return () => clearTimeout(timeout);
+
+    loadRandomBackground();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
-    /* Full-screen wrapper — background image, clickable */
+    /* Full-screen wrapper - background image, clickable */
     <div
       className="relative flex items-center justify-center w-screen h-screen overflow-hidden cursor-pointer"
       onClick={onStart}
@@ -51,7 +45,7 @@ export const WelcomeScreen = ({ onStart = () => {} }: WelcomeScreenProps) => {
       {/* Dark gradient overlay for depth */}
       <div className="absolute inset-0 bg-gradient-to-t from-[rgba(12,8,18,0.65)] via-transparent to-[rgba(12,8,18,0.35)]" />
 
-      {/* Content — fades + slides in on mount */}
+      {/* Content - fades + slides in on mount */}
       <div
         className={`relative z-10 flex flex-col items-center justify-between h-full w-full px-5 py-16
           transition-all duration-700 ease-out
@@ -108,9 +102,6 @@ export const WelcomeScreen = ({ onStart = () => {} }: WelcomeScreenProps) => {
         {/* Bottom spacer so content doesn't touch edge */}
         <div className="h-8" />
       </div>
-
-      {/* Hidden: camera request status — no UI needed */}
-      {isRequestingCamera && <span className="sr-only">Requesting camera…</span>}
     </div>
   );
 };

@@ -8,9 +8,9 @@
 export const CAMERA_CONFIG = {
   VIDEO_CONSTRAINTS: {
     facingMode: 'user',
-    width: { ideal: 3840, min: 1920 },
-    height: { ideal: 2160, min: 1080 },
-    frameRate: { ideal: 60, min: 30 },
+    width: { ideal: 1920, min: 1280 },
+    height: { ideal: 1080, min: 720 },
+    frameRate: { ideal: 30, min: 24 },
   },
   SCROLL_SPEED_MULTIPLIER: 2,
 } as const;

@@ -6,6 +6,8 @@
   z-index: 10;
   width: 260px;
   height: 260px;
+  transform: translateZ(0);
+  contain: layout paint;
 }
 
 .advanced-spinner {
@@ -27,6 +29,7 @@
   box-shadow: 0 0 30px #e040fb, 0 0 80px #a855f7, inset 0 0 15px #fff;
   animation: pulse-core 2s ease-in-out infinite alternate;
   z-index: 5;
+  will-change: transform, opacity, box-shadow;
 }
 
 /* Soft pulsating aura behind the core */
@@ -38,6 +41,7 @@
   border-radius: 50%;
   animation: pulse-aura 3s ease-in-out infinite alternate;
   z-index: 4;
+  will-change: transform, opacity;
 }
 
 /* Outer rotating rings */
@@ -45,6 +49,7 @@
   position: absolute;
   border-radius: 50%;
   border: 4px solid transparent;
+  will-change: transform;
 }
 
 /* Outer Ring */
@@ -91,6 +96,7 @@
   height: 250px;
   animation: spin 8s linear infinite;
   z-index: 6;
+  will-change: transform;
 }
 
 .spinner-particles::before,
