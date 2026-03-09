@@ -22,7 +22,7 @@ interface AIImageScreenProps {
 function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): React.JSX.Element {
   // Segmentation tuning variables (change these and rebuild as needed)
   const MASK_THRESHOLD = 0.7; // 0.0 to 1.0 (lowered for better edge detection)
-  const MASK_EDGE_BLUR_PX = 3; // Reduced blur for sharper edges and faster processing
+  const MASK_EDGE_BLUR_PX = 5; // Reduced blur for sharper edges and faster processing
   const FINAL_REMOVAL_MODEL = 'medium'; // Use IMG.LY's medium model preset
   const FINAL_REMOVAL_DEVICE = 'cpu'; // CPU processing
   const FINAL_OUTPUT_MIME = 'image/jpeg';
