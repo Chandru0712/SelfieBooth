@@ -27,7 +27,25 @@ export default defineConfig({
     terserOptions: {
       compress: {
         drop_console: true,
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.debug'],
       },
     },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'mediapipe': ['@mediapipe/selfie_segmentation', '@mediapipe/camera_utils'],
+          'imgly': ['@imgly/background-removal'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
+    cssCodeSplit: true,
+    assetsInlineLimit: 4096,
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'uuid'],
+    exclude: ['@imgly/background-removal'],
   },
 })

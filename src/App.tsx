@@ -38,28 +38,33 @@ const AIImageScreen = lazy(() => import('./components/screens/jsx/AIImageScreen'
 import type { ImageData, Frame } from './types';
 
 // ========== 1.3 IMPORTS - DYNAMIC ASSETS ==========
-// Dynamically import frames
-const childrenFramesRaw = import.meta.glob('./assets/Frames/Children/*.{png,webp}', { eager: true, query: '?url' });
-const adultFramesRaw = import.meta.glob('./assets/Frames/Adult/*.{png,webp}', { eager: true, query: '?url' });
-const proverbFramesRaw = import.meta.glob('./assets/Frames/Proverb/*.{png,webp}', { eager: true, query: '?url' });
-const collageFramesRaw = import.meta.glob('./assets/Frames/Creative/*.{png,webp}', { eager: true, query: '?url' });
+// Lazy load frames on-demand for faster initial load
+const childrenFramesRaw = import.meta.glob('./assets/Frames/Children/*.{png,webp}', { eager: false, query: '?url' });
+const adultFramesRaw = import.meta.glob('./assets/Frames/Adult/*.{png,webp}', { eager: false, query: '?url' });
+const proverbFramesRaw = import.meta.glob('./assets/Frames/Proverb/*.{png,webp}', { eager: false, query: '?url' });
+const collageFramesRaw = import.meta.glob('./assets/Frames/Creative/*.{png,webp}', { eager: false, query: '?url' });
 // ========== 2.0 FRAME DATA LOADING & FORMATTING ==========
 
 /**
- * Format frames from glob results
+ * Format frames from glob results (async for lazy loading)
  */
-const formatFrames = (rawGlob: Record<string, any>, categoryName: string): Frame[] => {
-  return Object.entries(rawGlob).map(([path, module]) => {
-    const fileName = path.split('/').pop()?.replace(/\.[^.]+$/, '') || 'unknown';
-    const imageUrl = (module as any).default || (module as any);
-    return {
-      id: `${categoryName}-${fileName}`,
-      name: `Frame ${fileName}`,
-      image: imageUrl,
-      path: path,
-      category: categoryName,
-    };
-  });
+const formatFrames = async (rawGlob: Record<string, any>, categoryName: string): Promise<Frame[]> => {
+  const entries = Object.entries(rawGlob);
+  const frames = await Promise.all(
+    entries.map(async ([path, loader]) => {
+      const fileName = path.split('/').pop()?.replace(/\.[^.]+$/, '') || 'unknown';
+      const module = await (loader as () => Promise<any>)();
+      const imageUrl = module.default || module;
+      return {
+        id: `${categoryName}-${fileName}`,
+        name: `Frame ${fileName}`,
+        image: imageUrl,
+        path: path,
+        category: categoryName,
+      };
+    })
+  );
+  return frames;
 };
 
 // ========== 3.0 SCREEN STATE MACHINE ==========
@@ -124,34 +129,43 @@ function App(): ReactElement {
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
-   * Load frames when category changes
+   * Load frames when category changes (async for lazy loading)
    */
   useEffect(() => {
-    let categoryFrames: Frame[] = [];
+    let cancelled = false;
+    
+    const loadFrames = async () => {
+      let categoryFrames: Frame[] = [];
 
-    switch (selectedCategory) {
-      case 'children':
-        categoryFrames = formatFrames(childrenFramesRaw, 'children');
-        break;
-      case 'adult':
-        categoryFrames = formatFrames(adultFramesRaw, 'adult');
-        break;
-      case 'proverb':
-        categoryFrames = formatFrames(proverbFramesRaw, 'proverb');
-        break;
-      case 'creative':
-        categoryFrames = formatFrames(collageFramesRaw, 'creative');
-        break;
-      default:
-        categoryFrames = [];
-    }
+      switch (selectedCategory) {
+        case 'children':
+          categoryFrames = await formatFrames(childrenFramesRaw, 'children');
+          break;
+        case 'adult':
+          categoryFrames = await formatFrames(adultFramesRaw, 'adult');
+          break;
+        case 'proverb':
+          categoryFrames = await formatFrames(proverbFramesRaw, 'proverb');
+          break;
+        case 'creative':
+          categoryFrames = await formatFrames(collageFramesRaw, 'creative');
+          break;
+        default:
+          categoryFrames = [];
+      }
 
-    const allFrames: Frame[] = [
-      ...categoryFrames,
-    ];
+      if (cancelled) return;
 
-    setFrames(allFrames);
-    setSelectedFrame(allFrames[0]?.id || 'none');
+      const allFrames: Frame[] = [
+        ...categoryFrames,
+      ];
+
+      setFrames(allFrames);
+      setSelectedFrame(allFrames[0]?.id || 'none');
+    };
+
+    loadFrames();
+    return () => { cancelled = true; };
   }, [selectedCategory]);
 
   /**

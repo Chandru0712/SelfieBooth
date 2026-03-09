@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { ImageData } from '../../../types';
 import { uploadImageAndGenerateQR } from '../../../utils/apiService.ts';
@@ -12,12 +12,12 @@ interface PreviewScreenProps {
   showAsOverlay?: boolean;
 }
 
-export const PreviewScreen = ({
+export const PreviewScreen = memo(function PreviewScreen({
   imageData,
   isVisible = false,
   onRetake = () => {},
   onContinue: _onContinue = () => {},
-}: PreviewScreenProps) => {
+}: PreviewScreenProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
@@ -104,6 +104,6 @@ export const PreviewScreen = ({
       )}
     </div>
   );
-};
+});
 
 export default PreviewScreen;

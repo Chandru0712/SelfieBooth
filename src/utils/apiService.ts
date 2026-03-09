@@ -126,11 +126,11 @@ export const uploadImageAndGenerateQR = async (
     const originalExt = getOriginalExt(fileName);
     const uploadName = `img_${uid}${originalExt}`;
 
-    // Compress image to stay within PHP server's upload limits (2MB safe ceiling)
+    // Compress image to stay within PHP server's upload limits (optimized for speed)
     const compressionOptions = {
-      maxSizeMB: 2,
-      maxWidthOrHeight: 2560,
-      initialQuality: 0.92,
+      maxSizeMB: 1.8,
+      maxWidthOrHeight: 2400,
+      initialQuality: 0.88,
       useWebWorker: true,
       fileType: "image/jpeg",
     };

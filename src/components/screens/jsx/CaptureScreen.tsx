@@ -154,16 +154,16 @@ export const CaptureScreen = ({
           }
         }
 
-        const initialBlob = await new Promise<Blob>((resolve) => { canvas.toBlob((blob) => resolve(blob as Blob), "image/jpeg", 0.95); });
+        const initialBlob = await new Promise<Blob>((resolve) => { canvas.toBlob((blob) => resolve(blob as Blob), "image/jpeg", 0.92); });
         const fileId = uuidv4();
         const imageUrl = URL.createObjectURL(initialBlob);
         const initialImageState: ImageData = { url: imageUrl, blob: initialBlob, metadata: { id: fileId, frameId: selectedFrame, capturedAt: new Date().toISOString(), width: dimensions.width, height: dimensions.height, size: initialBlob.size, fileName: `${fileId}.jpg` } as any };
 
         let finalImageState = initialImageState;
-        if (initialBlob.size > 8 * 1024 * 1024) {
+        if (initialBlob.size > 6 * 1024 * 1024) {
           if (isMountedRef.current) setIsCompressing(true);
           try {
-            const options = { maxSizeMB: 8, maxWidthOrHeight: 4000, useWebWorker: true, initialQuality: 0.95, alwaysKeepResolution: true, fileType: "image/jpeg" };
+            const options = { maxSizeMB: 5, maxWidthOrHeight: 3840, useWebWorker: true, initialQuality: 0.88, alwaysKeepResolution: false, fileType: "image/jpeg" };
             const compressedBlob = await imageCompression(new File([initialBlob], "temp.jpg", { type: "image/jpeg" }), options);
             finalImageState = { ...finalImageState, blob: compressedBlob, url: URL.createObjectURL(compressedBlob), metadata: { ...finalImageState.metadata, size: compressedBlob.size } };
           } catch { /* use original */ } finally { if (isMountedRef.current) setIsCompressing(false); }
