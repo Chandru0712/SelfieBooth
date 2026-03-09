@@ -14,7 +14,7 @@ export default defineConfig({
     // WASM files are automatically served with correct MIME type
     proxy: {
       '/api': {
-        target: 'https://selfiebooth.aazp.in/',
+        target: 'https://svsinfotech.in/zooimage/',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         secure: true,

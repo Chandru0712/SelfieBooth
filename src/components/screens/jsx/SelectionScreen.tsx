@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { Category } from '../../../types';
+import Tiger from '../../../assets/Tiger.webp';
 
 interface SelectionScreenProps {
   onSelectCategory?: (categoryId: string) => void;
@@ -16,26 +17,6 @@ const CATEGORIES: Category[] = [
 export const SelectionScreen = ({ onSelectCategory = () => {} }: SelectionScreenProps) => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string>('');
-
-  useEffect(() => {
-    let cancelled = false;
-    const tigerLoader = import.meta.glob('../../../assets/Tiger.webp', { query: '?url' });
-    const loader = Object.values(tigerLoader)[0] as (() => Promise<{ default?: string } | string>) | undefined;
-
-    if (!loader) return;
-    const loadBackground = async () => {
-      const loaded = await loader();
-      if (!cancelled) {
-        setBackgroundImageUrl((loaded as { default?: string }).default || (loaded as string));
-      }
-    };
-
-    loadBackground();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const handleSelectCategory = (categoryId: string): void => {
     setSelectedCategory(categoryId);
@@ -47,7 +28,7 @@ export const SelectionScreen = ({ onSelectCategory = () => {} }: SelectionScreen
     <div
       className="relative flex flex-col items-center justify-between w-screen h-screen overflow-hidden"
       style={{
-        backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined,
+        backgroundImage: `url(${Tiger})`,
         backgroundPosition: 'center',
         backgroundSize: 'contain',
         backgroundRepeat: 'no-repeat',

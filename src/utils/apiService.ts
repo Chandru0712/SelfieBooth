@@ -44,7 +44,7 @@ const getOriginalExt = (fileName: string): string =>
 export const getResponseUrl = (payload: UploadResponse | null, uploadName: string): string => {
   if (!payload) return '';
 
-  const UPLOADS_BASE_URL = API_CONFIG.UPLOADS_BASE_URL || 'https://selfiebooth.aazp.in/uploads/';
+  const UPLOADS_BASE_URL = API_CONFIG.UPLOADS_BASE_URL || 'https://svsinfotech.in/zooimage/uploads/';
 
   // Try status field — if status is error/failed, short-circuit
   const statusField = (payload as Record<string, unknown>)['status'];

@@ -23,7 +23,7 @@
  * ================================================================================
  */
 
-import { useState, useEffect, useRef, ReactElement, Suspense, lazy, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, ReactElement, Suspense, lazy } from 'react';
 
 // ========== 1.0 IMPORTS - SCREENS ==========
 // Import screens lazily to dramatically improve initial load times
@@ -38,59 +38,28 @@ const AIImageScreen = lazy(() => import('./components/screens/jsx/AIImageScreen'
 import type { ImageData, Frame } from './types';
 
 // ========== 1.3 IMPORTS - DYNAMIC ASSETS ==========
-// Keep frame imports lazy so initial app load does not eagerly include every frame category.
-type FrameModuleLoader = () => Promise<{ default?: string } | string>;
-const FRAME_GLOBS: Record<string, Record<string, FrameModuleLoader>> = {
-  children: import.meta.glob('./assets/Frames/Children/*.webp', { query: '?url' }) as Record<string, FrameModuleLoader>,
-  adult: import.meta.glob('./assets/Frames/Adult/*.webp', { query: '?url' }) as Record<string, FrameModuleLoader>,
-  proverb: import.meta.glob('./assets/Frames/Proverb/*.webp', { query: '?url' }) as Record<string, FrameModuleLoader>,
-  creative: import.meta.glob('./assets/Frames/Creative/*.webp', { query: '?url' }) as Record<string, FrameModuleLoader>,
-};
+// Dynamically import frames
+const childrenFramesRaw = import.meta.glob('./assets/Frames/Children/*.{png,webp}', { eager: true, query: '?url' });
+const adultFramesRaw = import.meta.glob('./assets/Frames/Adult/*.{png,webp}', { eager: true, query: '?url' });
+const proverbFramesRaw = import.meta.glob('./assets/Frames/Proverb/*.{png,webp}', { eager: true, query: '?url' });
+const collageFramesRaw = import.meta.glob('./assets/Frames/Creative/*.{png,webp}', { eager: true, query: '?url' });
+// ========== 2.0 FRAME DATA LOADING & FORMATTING ==========
 
-const frameCache = new Map<string, Frame[]>();
-const framePromiseCache = new Map<string, Promise<Frame[]>>();
-
-const loadFramesForCategory = async (categoryName: string): Promise<Frame[]> => {
-  if (frameCache.has(categoryName)) {
-    return frameCache.get(categoryName)!;
-  }
-  if (framePromiseCache.has(categoryName)) {
-    return framePromiseCache.get(categoryName)!;
-  }
-
-  const categoryGlob = FRAME_GLOBS[categoryName];
-  if (!categoryGlob) return [];
-
-  const pendingFrames = Promise.all(
-    Object.entries(categoryGlob).map(async ([path, loader]) => {
-      const loadedModule = await loader();
-      const fileName = path.split('/').pop()?.replace(/\.[^.]+$/, '') || 'unknown';
-      const imageUrl = (loadedModule as { default?: string }).default || (loadedModule as string);
-      return {
-        id: `${categoryName}-${fileName}`,
-        name: `Frame ${fileName}`,
-        image: imageUrl,
-        path,
-        category: categoryName,
-      };
-    })
-  ).then((loadedFrames) => {
-    loadedFrames.sort((a, b) => a.name.localeCompare(b.name));
-    frameCache.set(categoryName, loadedFrames);
-    framePromiseCache.delete(categoryName);
-    return loadedFrames;
+/**
+ * Format frames from glob results
+ */
+const formatFrames = (rawGlob: Record<string, any>, categoryName: string): Frame[] => {
+  return Object.entries(rawGlob).map(([path, module]) => {
+    const fileName = path.split('/').pop()?.replace(/\.[^.]+$/, '') || 'unknown';
+    const imageUrl = (module as any).default || (module as any);
+    return {
+      id: `${categoryName}-${fileName}`,
+      name: `Frame ${fileName}`,
+      image: imageUrl,
+      path: path,
+      category: categoryName,
+    };
   });
-
-  framePromiseCache.set(categoryName, pendingFrames);
-  return pendingFrames;
-};
-
-const CATEGORY_NAMES: Record<string, string> = {
-  children: 'Children',
-  adult: 'Adult',
-  proverb: 'Proverb',
-  creative: 'Creative',
-  wildlife: 'Wild Life',
 };
 
 // ========== 3.0 SCREEN STATE MACHINE ==========
@@ -143,105 +112,76 @@ function App(): ReactElement {
   const [selectedCategory, setSelectedCategory] = useState<string>('children');
   
   // ========== FRAME STATE ==========
+  const [frames, setFrames] = useState<Frame[]>([]);
   const [selectedFrame, setSelectedFrame] = useState<string>('none');
   
   // ========== PHOTO STATE ==========
   const [capturedImageData, setCapturedImageData] = useState<ImageData | null>(null);
-  const [frames, setFrames] = useState<Frame[]>([]);
-  const [isFramesLoading, setIsFramesLoading] = useState(false);
 
   // ========== INACTIVITY TIMER ==========
   // 30 minutes in milliseconds
   const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * Load frames when category changes
+   */
   useEffect(() => {
-    let cancelled = false;
+    let categoryFrames: Frame[] = [];
 
-    const loadFrames = async () => {
-      setIsFramesLoading(true);
-      const loadedFrames = await loadFramesForCategory(selectedCategory);
-      if (!cancelled) {
-        setFrames(loadedFrames);
-        setIsFramesLoading(false);
-      }
-    };
+    switch (selectedCategory) {
+      case 'children':
+        categoryFrames = formatFrames(childrenFramesRaw, 'children');
+        break;
+      case 'adult':
+        categoryFrames = formatFrames(adultFramesRaw, 'adult');
+        break;
+      case 'proverb':
+        categoryFrames = formatFrames(proverbFramesRaw, 'proverb');
+        break;
+      case 'creative':
+        categoryFrames = formatFrames(collageFramesRaw, 'creative');
+        break;
+      default:
+        categoryFrames = [];
+    }
 
-    loadFrames();
-    return () => {
-      cancelled = true;
-    };
+    const allFrames: Frame[] = [
+      ...categoryFrames,
+    ];
+
+    setFrames(allFrames);
+    setSelectedFrame(allFrames[0]?.id || 'none');
   }, [selectedCategory]);
-
-  useEffect(() => {
-    const win = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-    let idleCallbackId: number | null = null;
-    let idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    const preloadScreensAndFrames = () => {
-      import('./components/screens/jsx/SelectionScreen');
-      import('./components/screens/jsx/CaptureScreen');
-      import('./components/screens/jsx/PreviewScreen');
-      import('./components/screens/jsx/AIImageScreen');
-
-      Object.keys(FRAME_GLOBS).forEach((category) => {
-        void loadFramesForCategory(category);
-      });
-    };
-
-    if (typeof win.requestIdleCallback === 'function') {
-      idleCallbackId = win.requestIdleCallback(preloadScreensAndFrames, { timeout: 2000 });
-    } else {
-      idleTimeoutId = setTimeout(preloadScreensAndFrames, 600);
-    }
-
-    return () => {
-      if (idleCallbackId !== null && typeof win.cancelIdleCallback === 'function') {
-        win.cancelIdleCallback(idleCallbackId);
-      }
-      if (idleTimeoutId !== null) {
-        clearTimeout(idleTimeoutId);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!frames.some((frame) => frame.id === selectedFrame)) {
-      setSelectedFrame(frames[0]?.id || 'none');
-    }
-  }, [frames, selectedFrame]);
 
   /**
    * Handle category selection
    */
-  const handleSelectCategory = useCallback((category: string): void => {
+  const handleSelectCategory = (category: string): void => {
     setSelectedCategory(category);
     if (category === 'blend' || category === 'wildlife') {
       setCurrentScreen(SCREENS.AI_IMAGE);
     } else {
       setCurrentScreen(SCREENS.CAPTURE);
     }
-  }, []);
+  };
 
   /**
    * Handle photo capture — stores image and shows preview
    */
-  const handleCapture = useCallback((imageData: ImageData): void => {
+  const handleCapture = (imageData: ImageData): void => {
     setCapturedImageData(imageData);
     setCurrentScreen(SCREENS.PREVIEW);
-  }, []);
+  };
 
 
   /**
    * Go back to welcome
    */
-  const handleBackToWelcome = useCallback((): void => {
+  const handleBackToWelcome = (): void => {
     setCurrentScreen(SCREENS.WELCOME);
     setCapturedImageData(null);
-  }, []);
+  };
 
   /**
    * Inactivity auto-reset: listen for ANY user activity.
@@ -291,10 +231,10 @@ function App(): ReactElement {
   /**
    * Navigation helpers
    */
-  const handleAIImageGenerated = useCallback((imageData: ImageData): void => {
+  const handleAIImageGenerated = (imageData: ImageData): void => {
     setCapturedImageData(imageData);
     setCurrentScreen(SCREENS.PREVIEW);
-  }, []);
+  };
 
 
   /**
@@ -304,12 +244,20 @@ function App(): ReactElement {
   // (All handlers are defined above in useEffect blocks and callback functions)
 
   // ========== 6.0 SCREEN RENDERING (CONDITIONAL DISPLAY) ==========
-  const categoryName = useMemo(
-    () => CATEGORY_NAMES[selectedCategory] || selectedCategory,
-    [selectedCategory]
-  );
+  const getCategoryName = (id: string) => {
+    const names: Record<string, string> = {
+      children: 'Children',
+      adult: 'Adult',
+      proverb: 'Proverb',
+      creative: 'Creative',
+      wildlife: 'Wild Life'
+    };
+    return names[id] || id;
+  };
 
   const renderScreen = (): ReactElement => {
+    const categoryName = getCategoryName(selectedCategory);
+
     switch (currentScreen) {
       case SCREENS.WELCOME:
         return (
@@ -339,7 +287,6 @@ function App(): ReactElement {
           <CaptureScreen
             category={categoryName}
             frames={frames}
-            isLoading={isFramesLoading}
             selectedFrame={selectedFrame}
             onSelectFrame={setSelectedFrame}
             onCapture={handleCapture}
@@ -369,7 +316,7 @@ function App(): ReactElement {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#0c0812] text-[#f0e6ff] font-[Outfit]">
       {/* Error boundary handled by main.tsx */}
-      <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-3xl tracking-wide">Loading...</div>}>
+      <Suspense fallback={null}>
         {renderScreen()}
       </Suspense>
     </div>

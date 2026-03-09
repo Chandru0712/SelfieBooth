@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useCamera } from "../../../hooks/useCamera.ts";
 import { v4 as uuidv4 } from "uuid";
 import imageCompression from "browser-image-compression";
@@ -6,7 +6,6 @@ import PreviewScreen from "./PreviewScreen";
 import type { ImageData, Frame } from "../../../types";
 
 const ZOOM_OPTIONS = [1, 1.25, 1.5, 1.75, 2];
-const FRAME_BATCH_SIZE = 12;
 
 interface CaptureScreenProps {
   category?: string;
@@ -27,7 +26,7 @@ export const CaptureScreen = ({
   onBack = () => {},
   isLoading: parentIsLoading = false,
 }: CaptureScreenProps) => {
-  const { videoRef, isInitialized, isLoading: cameraLoading } = useCamera();
+  const { videoRef, isInitialized, isLoading: cameraLoading, error: cameraError, restart } = useCamera();
   const isLoading = parentIsLoading || cameraLoading;
 
   const [timerDuration, setTimerDuration] = useState(5);
@@ -36,71 +35,37 @@ export const CaptureScreen = ({
   const [countdownValue, setCountdownValue] = useState(0);
   const [showFlash, setShowFlash] = useState(false);
   const [isFrameDragging, setIsFrameDragging] = useState(false);
+  const [frameDragStart, setFrameDragStart] = useState(0);
+  const [frameDragStartScroll, setFrameDragStartScroll] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [showTimerPopup, setShowTimerPopup] = useState(false);
   const [showZoomPopup, setShowZoomPopup] = useState(false);
+  const [frameAspectRatio, setFrameAspectRatio] = useState(16 / 9);
   const [previewDimensions, setPreviewDimensions] = useState({ width: "80%", height: "auto" });
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [capturedImage, setCapturedImage] = useState<ImageData | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCompressing, setIsCompressing] = useState(false);
-  const [visibleFrameCount, setVisibleFrameCount] = useState(FRAME_BATCH_SIZE);
 
   const frameScrollRef = useRef<HTMLDivElement>(null);
   const countdownIntervalRef = useRef<any>(null);
   const timerWrapperRef = useRef<HTMLDivElement>(null);
   const zoomWrapperRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
-  const frameLayerRef = useRef<HTMLImageElement>(null);
-  const frameDragStartRef = useRef(0);
-  const frameDragStartScrollRef = useRef(0);
-  const frameButtonCentersRef = useRef<Array<{ id: string; center: number }>>([]);
-  const frameDimensionsCacheRef = useRef<Map<string, { width: number; height: number }>>(new Map());
-  const frameSelectionRafRef = useRef<number | null>(null);
   const isMountedRef = useRef<boolean>(true);
-  const selectedFrameData = useMemo(
-    () => frames.find((frame) => frame.id === selectedFrame),
-    [frames, selectedFrame]
-  );
-  const visibleFrames = useMemo(
-    () => frames.slice(0, visibleFrameCount),
-    [frames, visibleFrameCount]
-  );
 
   useEffect(() => {
     isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      if (frameSelectionRafRef.current !== null) {
-        cancelAnimationFrame(frameSelectionRafRef.current);
-      }
-    };
+    return () => { isMountedRef.current = false; };
   }, []);
 
   useEffect(() => {
-    setVisibleFrameCount(FRAME_BATCH_SIZE);
-    if (frames.length <= FRAME_BATCH_SIZE) return;
-
-    let cancelled = false;
-    const appendFrames = () => {
-      if (cancelled) return;
-      setVisibleFrameCount((prev) => {
-        if (prev >= frames.length) return prev;
-        const nextCount = Math.min(prev + FRAME_BATCH_SIZE, frames.length);
-        if (nextCount < frames.length) {
-          setTimeout(appendFrames, 16);
-        }
-        return nextCount;
-      });
-    };
-
-    const timer = setTimeout(appendFrames, 16);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [frames]);
+    if (!frameScrollRef.current || !selectedFrame) return;
+    const track = frameScrollRef.current;
+    const selected = track.querySelector('.frame-item-selected') as HTMLElement;
+    if (selected) selected.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [selectedFrame]);
 
   const getCaptureDimensions = () => {
     const container = previewContainerRef.current;
@@ -118,7 +83,7 @@ export const CaptureScreen = ({
     return { width: Math.round(captureWidth), height: Math.round(captureHeight) };
   };
 
-  const handleCaptureClick = useCallback(async () => {
+  const handleCaptureClick = async () => {
     if (isCapturing || !isInitialized) return;
     setIsCapturing(true);
     setShowCountdown(true);
@@ -175,10 +140,11 @@ export const CaptureScreen = ({
         }
 
         if (selectedFrame !== "none") {
-          const frameEl = frameLayerRef.current;
+          const frameEl = document.querySelector(".frame-layer") as HTMLImageElement;
           if (frameEl && frameEl.complete && ctx) {
             ctx.drawImage(frameEl, 0, 0, cWidth, cHeight);
           } else {
+            const selectedFrameData = frames.find((f) => f.id === selectedFrame);
             if (selectedFrameData?.image) {
               const img = new Image();
               img.crossOrigin = "anonymous";
@@ -211,7 +177,7 @@ export const CaptureScreen = ({
         if (isMountedRef.current) setIsCapturing(false);
       }
     }, timerDuration * 1000);
-  }, [isCapturing, isInitialized, timerDuration, zoomLevel, selectedFrame, selectedFrameData]);
+  };
 
   const handleRetake = () => {
     if (capturedImage?.url) URL.revokeObjectURL(capturedImage.url);
@@ -220,49 +186,26 @@ export const CaptureScreen = ({
 
   const handleFrameDragStart = (e: React.MouseEvent<HTMLDivElement>) => {
     setIsFrameDragging(true);
-    frameDragStartRef.current = e.clientX;
-    frameDragStartScrollRef.current = frameScrollRef.current?.scrollLeft || 0;
-    const container = frameScrollRef.current;
-    if (!container) return;
-    const buttons = Array.from(container.querySelectorAll(".frame-thumb-btn")) as HTMLElement[];
-    frameButtonCentersRef.current = buttons
-      .map((btn, index) => ({
-        id: frames[index]?.id || "",
-        center: btn.offsetLeft + btn.offsetWidth / 2,
-      }))
-      .filter((item) => item.id);
+    setFrameDragStart(e.clientX);
+    setFrameDragStartScroll(frameScrollRef.current?.scrollLeft || 0);
   };
-
-  const syncSelectedFrameFromScroll = useCallback((newScroll: number) => {
-    const container = frameScrollRef.current;
-    if (!container) return;
-    const containerCenter = container.offsetWidth / 2;
-    const centerFramePos = newScroll + containerCenter;
-    let closestFrameId = selectedFrame;
-    let minDistance = Infinity;
-    frameButtonCentersRef.current.forEach(({ id, center }) => {
-      const distance = Math.abs(centerFramePos - center);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestFrameId = id;
-      }
-    });
-    if (closestFrameId && closestFrameId !== selectedFrame && minDistance < 100) {
-      onSelectFrame(closestFrameId);
-    }
-  }, [onSelectFrame, selectedFrame]);
 
   const handleFrameDragMove = useCallback((e: MouseEvent) => {
     if (!frameScrollRef.current || !isFrameDragging) return;
-    const diff = e.clientX - frameDragStartRef.current;
-    const newScroll = frameDragStartScrollRef.current - diff;
+    const diff = e.clientX - frameDragStart;
+    const newScroll = frameDragStartScroll - diff;
     frameScrollRef.current.scrollLeft = newScroll;
-    if (frameSelectionRafRef.current !== null) return;
-    frameSelectionRafRef.current = requestAnimationFrame(() => {
-      frameSelectionRafRef.current = null;
-      syncSelectedFrameFromScroll(newScroll);
+    const container = frameScrollRef.current;
+    const containerCenter = container.offsetWidth / 2;
+    const centerFramePos = newScroll + containerCenter;
+    let closestFrameId = selectedFrame, minDistance = Infinity;
+    container.querySelectorAll(".frame-thumb-btn").forEach((btn, index) => {
+      const btnCenter = (btn as HTMLElement).offsetLeft + (btn as HTMLElement).offsetWidth / 2;
+      const distance = Math.abs(centerFramePos - btnCenter);
+      if (distance < minDistance) { minDistance = distance; closestFrameId = frames[index]?.id; }
     });
-  }, [isFrameDragging, syncSelectedFrameFromScroll]);
+    if (closestFrameId && closestFrameId !== selectedFrame && minDistance < 100) onSelectFrame(closestFrameId);
+  }, [frameDragStart, frameDragStartScroll, selectedFrame, frames, onSelectFrame, isFrameDragging]);
 
   const handleFrameDragEnd = useCallback(() => setIsFrameDragging(false), []);
 
@@ -271,10 +214,12 @@ export const CaptureScreen = ({
       const container = frameScrollRef.current;
       const selectedBtn = container.querySelector(".frame-item-selected");
       if (selectedBtn) {
-        const containerWidth = container.offsetWidth;
-        const btnLeft = (selectedBtn as HTMLElement).offsetLeft;
-        const btnWidth = (selectedBtn as HTMLElement).offsetWidth;
-        container.scrollTo({ left: Math.max(0, btnLeft + btnWidth / 2 - containerWidth / 2), behavior: "auto" });
+        setTimeout(() => {
+          const containerWidth = container.offsetWidth;
+          const btnLeft = (selectedBtn as HTMLElement).offsetLeft;
+          const btnWidth = (selectedBtn as HTMLElement).offsetWidth;
+          container.scrollTo({ left: Math.max(0, btnLeft + btnWidth / 2 - containerWidth / 2), behavior: "smooth" });
+        }, 0);
       }
     }
   }, [selectedFrame]);
@@ -283,10 +228,12 @@ export const CaptureScreen = ({
 
   useEffect(() => {
     if (selectedFrame === "none" || frames.length === 0) return;
-    if (!selectedFrameData?.image) return;
+    const selectedFrameObj = frames.find((f) => f.id === selectedFrame);
+    if (!selectedFrameObj?.image) return;
     const computeDimensions = (frameWidth: number, frameHeight: number) => {
       if (!frameWidth || !frameHeight) return;
       const ratio = frameWidth / frameHeight;
+      setFrameAspectRatio(ratio);
       const maxW = window.innerWidth - 40;
       const maxH = window.innerHeight - 380;
       let targetW = maxW, targetH = targetW / ratio;
@@ -294,21 +241,10 @@ export const CaptureScreen = ({
       if (targetH < 250) { targetH = 250; targetW = targetH * ratio; }
       setPreviewDimensions({ width: `${Math.round(targetW)}px`, height: `${Math.round(targetH)}px` });
     };
-    const cachedDimensions = frameDimensionsCacheRef.current.get(selectedFrameData.id);
-    if (cachedDimensions) {
-      computeDimensions(cachedDimensions.width, cachedDimensions.height);
-      return;
-    }
-    const img = new Image();
-    img.decoding = "async";
-    img.onload = () => {
-      const loadedWidth = img.naturalWidth;
-      const loadedHeight = img.naturalHeight;
-      frameDimensionsCacheRef.current.set(selectedFrameData.id, { width: loadedWidth, height: loadedHeight });
-      computeDimensions(loadedWidth, loadedHeight);
-    };
-    img.src = selectedFrameData.image;
-  }, [selectedFrameData, windowSize]);
+    const cachedImgEl = document.querySelector(`img[src="${selectedFrameObj.image}"]`) as HTMLImageElement;
+    if (cachedImgEl && cachedImgEl.naturalWidth) { computeDimensions(cachedImgEl.naturalWidth, cachedImgEl.naturalHeight); }
+    else { const img = new Image(); img.onload = () => computeDimensions(img.naturalWidth, img.naturalHeight); img.src = selectedFrameObj.image; }
+  }, [selectedFrame, frames, windowSize]);
 
   useEffect(() => {
     const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
@@ -334,7 +270,7 @@ export const CaptureScreen = ({
     };
     window.addEventListener("keydown", handleKeyPress);
     return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [handleCaptureClick]);
+  }, [isCapturing, showTimerPopup, showZoomPopup]);
 
   useEffect(() => () => { if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current); }, []);
 
@@ -366,19 +302,22 @@ export const CaptureScreen = ({
       </div>
 
       {/* ── CONTROLS ── */}
-      <div className="relative z-10 flex items-center justify-center gap-[100px] px-[50px] py-4 mt-[50px] mb-[50px] shrink-0">
+      <div className="relative z-30 flex items-center justify-center gap-[100px] px-[50px] py-4 mt-[50px] mb-[50px] shrink-0">
         {/* Timer */}
         <div className="relative" ref={timerWrapperRef}>
           <button
             className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.6)] text-[#f0e6ff] font-black transition-all duration-300 hover:bg-[rgba(168,85,247,0.18)] hover:text-white"
             style={{ boxShadow: '0 0 8px rgba(168,85,247,0.18)', border: '1px solid #a855f7' }}
-            onClick={() => setShowTimerPopup(!showTimerPopup)}
+            onClick={() => {
+              setShowTimerPopup((prev) => !prev);
+              setShowZoomPopup(false);
+            }}
           >
             <small className="text-[1.1rem] text-[#b8a4d4] uppercase tracking-widest">TIMER</small>
             <strong className="text-[2rem]">{timerDuration}s</strong>
           </button>
           {showTimerPopup && (
-            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)] overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
+            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-[120] flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)] overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
               {[0, 5, 10, 15, 20, 25, 30].map(v => (
                 <button key={v} className={`w-full py-4 text-center text-[1.5rem] font-semibold border-none transition-all duration-200 ${timerDuration === v ? 'bg-[rgba(168,85,247,0.15)] text-white' : 'text-[#a855f7] hover:bg-[rgba(168,85,247,0.15)] hover:text-white'}`}
                   onClick={() => { setTimerDuration(v); setShowTimerPopup(false); }}>
@@ -406,13 +345,16 @@ export const CaptureScreen = ({
           <button
             className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.6)] text-[#f0e6ff] font-black transition-all duration-300 hover:bg-[rgba(168,85,247,0.18)] hover:text-white"
             style={{ boxShadow: '0 0 8px rgba(168,85,247,0.18)', border: '1px solid #a855f7' }}
-            onClick={() => setShowZoomPopup(!showZoomPopup)}
+            onClick={() => {
+              setShowZoomPopup((prev) => !prev);
+              setShowTimerPopup(false);
+            }}
           >
             <small className="text-[1.1rem] text-[#b8a4d4] uppercase tracking-widest">ZOOM</small>
             <strong className="text-[2rem]">{zoomLevel}x</strong>
           </button>
           {showZoomPopup && (
-            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)] overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
+            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-[120] flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)] overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
               {ZOOM_OPTIONS.map(v => (
                 <button key={v} className={`w-full py-4 text-center text-[1.5rem] font-semibold border-none transition-all duration-200 ${zoomLevel === v ? 'bg-[rgba(168,85,247,0.15)] text-white' : 'text-[#a855f7] hover:bg-[rgba(168,85,247,0.15)] hover:text-white'}`}
                   onClick={() => { setZoomLevel(v); setShowZoomPopup(false); }}>
@@ -437,11 +379,9 @@ export const CaptureScreen = ({
             />
             {selectedFrame !== "none" && (
               <img
-                ref={frameLayerRef}
-                src={selectedFrameData?.image}
+                src={frames.find(f => f.id === selectedFrame)?.image}
                 className="frame-layer"
                 alt="frame"
-                decoding="async"
                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none', zIndex: 10 }}
               />
             )}
@@ -464,22 +404,19 @@ export const CaptureScreen = ({
           draggable="false"
           onDragStart={(e) => e.preventDefault()}
         >
-          {visibleFrames.map((frame) => {
+          {frames.map((frame) => {
             const isSelected = selectedFrame === frame.id;
             return (
               <button
                 key={frame.id}
                 className={`frame-thumb-btn h-[220px] w-auto shrink-0 rounded-sm overflow-hidden bg-transparent p-0 flex items-center justify-center transition-transform duration-200 ${isSelected ? 'frame-item-selected border-[3px]' : 'border-[3px] border-transparent'}`}
-                onClick={() => onSelectFrame(frame.id)}
+                onClick={() => setTimeout(() => onSelectFrame(frame.id), 0)}
               >
-                <img src={frame.image} alt={frame.name} draggable="false" loading="lazy" decoding="async" className="h-full w-auto object-contain block" />
+                <img src={frame.image} alt={frame.name} draggable="false" className="h-full w-auto object-contain block" />
               </button>
             );
           })}
         </div>
-        {(isLoading || visibleFrameCount < frames.length) && (
-          <div className="mt-2 text-center text-sm text-[#b8a4d4]">Loading frames...</div>
-        )}
       </div>
 
       <PreviewScreen

@@ -68,7 +68,7 @@ npm run preview
 
 If you are using external APIs (such as Hugging Face for AI generative features or a backend API), please ensure to configure the appropriate base URLs or API keys in the `.env` file or within `src/utils/apiService.ts`.
 
-Production deployment defaults to: `https://selfiebooth.aazp.in/`
+Production deployment defaults to: `https://svsinfotech.in/zooimage/`
 
 ## 📄 License
 

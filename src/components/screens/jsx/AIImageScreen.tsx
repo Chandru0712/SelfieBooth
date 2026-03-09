@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import Webcam from 'react-webcam';
 import { SelfieSegmentation, Results } from '@mediapipe/selfie_segmentation';
 import { Camera } from '@mediapipe/camera_utils';
@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import PreviewScreen from './PreviewScreen';
 import CubeSpinner from '../../CubeSpinner';
 
-interface ImglyModule {
+interface BackgroundRemovalModule {
   default?: (blob: Blob, config: any) => Promise<Blob>;
   removeBackground?: (blob: Blob, config: any) => Promise<Blob>;
   preload?: (config: any) => Promise<void>;
@@ -19,23 +19,18 @@ interface AIImageScreenProps {
   isLoading?: boolean;
 }
 
-type BgModuleLoader = () => Promise<{ default?: string } | string>;
-
 function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): React.JSX.Element {
   // Segmentation tuning variables (change these and rebuild as needed)
   const MASK_THRESHOLD = 0.7; // 0.0 to 1.0 (lowered for better edge detection)
-  const MASK_EDGE_BLUR_PX = 2;
-  const FINAL_REMOVAL_MODEL = 'medium'; // Use 'medium' for better compatibility (isnet requires local hosting)
+  const MASK_EDGE_BLUR_PX = 4; // Reduced blur for sharper edges
+  const FINAL_REMOVAL_MODEL = 'medium'; // Use IMG.LY's medium model preset
   const FINAL_REMOVAL_DEVICE = 'cpu'; // Use CPU for better compatibility
   const FINAL_OUTPUT_MIME = 'image/jpeg';
-  const FINAL_OUTPUT_QUALITY = 0.95;
-  const ENABLE_IMGLY_PRELOAD = true;
+  const FINAL_OUTPUT_QUALITY = 0.92;
+  const ENABLE_REMOVAL_PRELOAD = true;
   const FLIP_HORIZONTAL = true; // mirror camera like a selfie
   const MEDIAPIPE_BASE_URL = '/models/';
   const MEDIAPIPE_ASSET_VERSION = '2026-02-16';
-  const PROCESSING_WIDTH = 1280;
-  const PROCESSING_HEIGHT = 720;
-  const MAX_EXPORT_WIDTH = 1920;
 
   const [timer, setTimer] = useState<number>(0);
   const [selectedCountdown, setSelectedCountdown] = useState<number>(5);
@@ -45,8 +40,6 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [processingTimeMs, setProcessingTimeMs] = useState<number | null>(null);
   const [activeBackgroundName, setActiveBackgroundName] = useState<string | null>(null);
-  const [backgroundList, setBackgroundList] = useState<string[]>([]);
-  const [captureDimensions, setCaptureDimensions] = useState<{ width: number; height: number } | null>(null);
   const [frameDimensions, setFrameDimensions] = useState<{ width: number; height: number }>({ width: 640, height: 480 });
   const [previewDimensions, setPreviewDimensions] = useState({ width: "80%", height: "auto" });
   const [isFrameDragging, setIsFrameDragging] = useState(false);
@@ -110,65 +103,36 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
   const webcamRef = useRef<Webcam>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const activeBackgroundRef = useRef<HTMLImageElement | null>(null);
   const rawMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const thresholdMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const resizedBackgroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const isSegmentationBusyRef = useRef(false);
-  const imglyModuleRef = useRef<ImglyModule | null>(null);
+  const backgroundRemovalModuleRef = useRef<BackgroundRemovalModule | null>(null);
   const processingStartRef = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const frameScrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loaders = import.meta.glob('../../../assets/Frames/WildLife/*.webp', {
+  const backgroundList = useMemo(() => {
+    const backgrounds = import.meta.glob('../../../assets/Frames/WildLife/*.{jpg,jpeg,png,webp}', {
+      eager: true,
       query: '?url'
-    }) as Record<string, BgModuleLoader>;
-
-    const loadBackgroundUrls = async (): Promise<void> => {
-      const loaderList = Object.values(loaders);
-      for (const loader of loaderList) {
-        const loaded = await loader();
-        if (cancelled) return;
-        const nextUrl = (loaded as { default?: string }).default || (loaded as string);
-        setBackgroundList((prev) => [...prev, nextUrl].sort());
-      }
-    };
-
-    loadBackgroundUrls();
-    return () => {
-      cancelled = true;
-    };
+    });
+    return Object.values(backgrounds).map((bg: any) => bg.default || bg).sort();
   }, []);
 
   // Function to load a new background (memoized)
   const loadBackground = useCallback((filename: string): void => {
     const img = new Image();
-    img.decoding = 'async';
     img.src = filename;
     img.onload = (): void => {
       activeBackgroundRef.current = img; // Update active image used by draw loop
       setActiveBackgroundName(filename);
       // Update canvas dimensions based on frame size
-      const frameWidth = img.naturalWidth || img.width;
-      const frameHeight = img.naturalHeight || img.height;
-      setFrameDimensions({ width: frameWidth, height: frameHeight });
-
-      const resizedCanvas = document.createElement('canvas');
-      resizedCanvas.width = PROCESSING_WIDTH;
-      resizedCanvas.height = PROCESSING_HEIGHT;
-      const resizedCtx = resizedCanvas.getContext('2d');
-      if (resizedCtx) {
-        resizedCtx.drawImage(img, 0, 0, PROCESSING_WIDTH, PROCESSING_HEIGHT);
-        resizedBackgroundCanvasRef.current = resizedCanvas;
-      }
+      setFrameDimensions({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
     };
     img.onerror = (): void => {
       console.error(`Failed to load background: ${filename}`);
     };
-  }, [PROCESSING_HEIGHT, PROCESSING_WIDTH]);
+  }, []);
 
   // Auto-select the first background on mount
   useEffect(() => {
@@ -256,13 +220,6 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       img.src = url;
     });
 
-  const blobToDrawable = async (blob: Blob): Promise<ImageBitmap | HTMLImageElement> => {
-    if (typeof createImageBitmap === 'function') {
-      return await createImageBitmap(blob);
-    }
-    return await blobToImage(blob);
-  };
-
   const captureRawVideoFrameBlob = async (dims: { width: number; height: number }): Promise<Blob> => {
     const video = webcamRef.current?.video;
     if (!video || video.readyState < 2) {
@@ -284,29 +241,14 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       frameCtx.translate(width, 0);
       frameCtx.scale(-1, 1);
     }
-    const videoAspect = video.videoWidth / video.videoHeight;
-    const targetAspect = width / height;
-    let sourceX = 0;
-    let sourceY = 0;
-    let sourceWidth = video.videoWidth;
-    let sourceHeight = video.videoHeight;
-
-    if (videoAspect > targetAspect) {
-      sourceWidth = video.videoHeight * targetAspect;
-      sourceX = (video.videoWidth - sourceWidth) / 2;
-    } else {
-      sourceHeight = video.videoWidth / targetAspect;
-      sourceY = (video.videoHeight - sourceHeight) / 2;
-    }
-
-    frameCtx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
+    frameCtx.drawImage(video, 0, 0, width, height);
     return canvasToBlob(frameCanvas, FINAL_OUTPUT_MIME, FINAL_OUTPUT_QUALITY);
   };
 
 
 
   const composeForegroundWithBackground = async (foregroundBlob: Blob, dims: { width: number; height: number }): Promise<HTMLCanvasElement> => {
-    const foregroundImage = await blobToDrawable(foregroundBlob);
+    const foregroundImage = await blobToImage(foregroundBlob);
     
     // Fill to the maximal captured resolution bounds
     const width = dims.width;
@@ -336,17 +278,14 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
     // Draw foreground (cutout person) on top
     exportCtx.drawImage(foregroundImage, 0, 0, width, height);
-    if ('close' in foregroundImage && typeof foregroundImage.close === 'function') {
-      foregroundImage.close();
-    }
     return exportCanvas;
   };
 
-  const getImglyModule = useCallback(async (): Promise<ImglyModule> => {
-    if (!imglyModuleRef.current) {
-      imglyModuleRef.current = await import('@imgly/background-removal') as any;
+  const getBackgroundRemovalModule = useCallback(async (): Promise<BackgroundRemovalModule> => {
+    if (!backgroundRemovalModuleRef.current) {
+      backgroundRemovalModuleRef.current = await import('@imgly/background-removal') as any;
     }
-    return imglyModuleRef.current!;
+    return backgroundRemovalModuleRef.current!;
   }, []);
 
   const getThresholdMask = useCallback((segmentationMask: CanvasImageSource, width: number, height: number): HTMLCanvasElement => {
@@ -428,11 +367,8 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       ctx.translate(-width, 0);
     }
     
-    const resizedBackground = resizedBackgroundCanvasRef.current;
     const activeBackground = activeBackgroundRef.current;
-    if (resizedBackground) {
-      ctx.drawImage(resizedBackground, 0, 0, width, height);
-    } else if (activeBackground) {
+    if (activeBackground) {
       ctx.drawImage(activeBackground, 0, 0, width, height);
     } else {
       ctx.fillStyle = '#00FF00'; 
@@ -469,19 +405,14 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
       camera = new Camera(video, {
         onFrame: async (): Promise<void> => {
-          if (cancelled || !isActive || isSegmentationBusyRef.current) return;
+          if (cancelled || !isActive) return;
           const frame = webcamRef.current?.video;
           if (frame) {
-            isSegmentationBusyRef.current = true;
-            try {
-              await selfieSegmentation.send({ image: frame });
-            } finally {
-              isSegmentationBusyRef.current = false;
-            }
+            await selfieSegmentation.send({ image: frame });
           }
         },
-        width: PROCESSING_WIDTH,
-        height: PROCESSING_HEIGHT
+        width: 3840,
+        height: 2160
       });
       camera.start();
     };
@@ -496,50 +427,37 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
         selfieSegmentation.close();
       }
     };
-  }, [PROCESSING_HEIGHT, PROCESSING_WIDTH, onResults]);
+  }, [onResults]);
+
+  // Load the first background when component mounts
+  useEffect(() => {
+    if (backgroundList.length === 0) return;
+    loadBackground(backgroundList[0]);
+  }, [backgroundList, loadBackground]);
 
   useEffect(() => {
-    if (!ENABLE_IMGLY_PRELOAD) return;
+    if (!ENABLE_REMOVAL_PRELOAD) return;
 
     let cancelled = false;
-    const preloadImgly = async (): Promise<void> => {
+    const preloadRemovalModel = async (): Promise<void> => {
       try {
-        const imglyModule = await getImglyModule();
-        const preload = imglyModule?.preload;
+        const backgroundRemovalModule = await getBackgroundRemovalModule();
+        const preload = backgroundRemovalModule?.preload;
         if (cancelled || typeof preload !== 'function') return;
         await preload({
           model: FINAL_REMOVAL_MODEL,
           device: FINAL_REMOVAL_DEVICE
         });
       } catch (error) {
-        console.warn('IMG.LY preload failed. Will load on first capture.', error);
+        console.warn('Background removal preload failed. Will load on first capture.', error);
       }
     };
 
-    const browserWindow = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-    let idleCallbackId: number | null = null;
-    let idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
-    if (typeof browserWindow.requestIdleCallback === 'function') {
-      idleCallbackId = browserWindow.requestIdleCallback(() => {
-        preloadImgly();
-      }, { timeout: 1500 });
-    } else {
-      idleTimeoutId = globalThis.setTimeout(preloadImgly, 250);
-    }
-
+    preloadRemovalModel();
     return (): void => {
       cancelled = true;
-      if (idleCallbackId !== null && typeof browserWindow.cancelIdleCallback === 'function') {
-        browserWindow.cancelIdleCallback(idleCallbackId);
-      }
-      if (idleTimeoutId !== null) {
-        globalThis.clearTimeout(idleTimeoutId);
-      }
     };
-  }, [ENABLE_IMGLY_PRELOAD, FINAL_REMOVAL_DEVICE, FINAL_REMOVAL_MODEL, getImglyModule]);
+  }, [ENABLE_REMOVAL_PRELOAD, FINAL_REMOVAL_DEVICE, FINAL_REMOVAL_MODEL, getBackgroundRemovalModule]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -559,20 +477,12 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   }, [isCountdownDropdownOpen]);
 
   const startPhotoProcess = (): void => {
-    if (timer > 0 || isProcessingCapture) return;
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
     setTimer(selectedCountdown); // Start at selected countdown value
 
-    countdownIntervalRef.current = setInterval((): void => {
+    const countdown: NodeJS.Timeout = setInterval((): void => {
       setTimer((prev) => {
         if (prev === 1) {
-          if (countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current);
-            countdownIntervalRef.current = null;
-          }
+          clearInterval(countdown);
           captureAndSave();
           return 0; // Reset timer
         }
@@ -583,20 +493,16 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
   const getCaptureDimensions = (): { width: number; height: number } => {
     const video = webcamRef.current?.video;
-    if (!video || !video.videoWidth || !video.videoHeight) {
-      return { width: PROCESSING_WIDTH, height: PROCESSING_HEIGHT };
+    if (!video || !video.videoWidth || !video.videoHeight || !frameDimensions.width || !frameDimensions.height) {
+       return frameDimensions;
     }
-    const aspect =
-      frameDimensions.width && frameDimensions.height
-        ? frameDimensions.width / frameDimensions.height
-        : video.videoWidth / video.videoHeight;
+    const aspect = frameDimensions.width / frameDimensions.height;
+    let height = video.videoHeight;
+    let width = height * aspect;
 
-    let width = Math.min(video.videoWidth, MAX_EXPORT_WIDTH);
-    let height = Math.round(width / aspect);
-
-    if (height > video.videoHeight) {
-      height = video.videoHeight;
-      width = Math.round(height * aspect);
+    if (width > video.videoWidth) {
+       width = video.videoWidth;
+       height = width / aspect;
     }
 
     return { width: Math.round(width), height: Math.round(height) };
@@ -620,16 +526,12 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     try {
       await waitForPaint();
       const dims = getCaptureDimensions();
-      setCaptureDimensions(dims);
-
-      const [rawFrameBlob, imglyModule] = await Promise.all([
-        captureRawVideoFrameBlob(dims),
-        getImglyModule(),
-      ]);
-      const removeBackground = imglyModule?.default || imglyModule?.removeBackground;
+      const rawFrameBlob = await captureRawVideoFrameBlob(dims);
+      const backgroundRemovalModule = await getBackgroundRemovalModule();
+      const removeBackground = backgroundRemovalModule?.default || backgroundRemovalModule?.removeBackground;
 
       if (typeof removeBackground !== 'function') {
-        throw new Error('IMG.LY removeBackground API is unavailable.');
+        throw new Error('Background removal API is unavailable.');
       }
 
       const config = {
@@ -643,7 +545,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
         progress: undefined // Disable progress callback for better performance
       };
 
-      // Remove background using imgly library
+      // Remove background using IMG.LY
       const foregroundBlob = await removeBackground(rawFrameBlob, config);
 
       // Composite the cutout with the selected background
@@ -651,6 +553,9 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       const finalBlob = await canvasToBlob(finalCanvas, FINAL_OUTPUT_MIME, FINAL_OUTPUT_QUALITY);
       
       // Show preview instead of downloading immediately
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
       setCapturePreviewBlob(finalBlob);
       setPreviewUrl(URL.createObjectURL(finalBlob));
       setShowCapturePreview(true);
@@ -676,41 +581,6 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     }
   };
 
-  useEffect(() => {
-    return () => {
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
-
-  const previewImageData = React.useMemo(() => {
-    if (!capturePreviewBlob || !previewUrl) return null;
-    const dims = captureDimensions || getCaptureDimensions();
-    const id = uuidv4();
-    return {
-      url: previewUrl,
-      blob: capturePreviewBlob,
-      metadata: {
-        id,
-        frameId: '',
-        capturedAt: new Date().toISOString(),
-        width: dims.width,
-        height: dims.height,
-        size: capturePreviewBlob.size,
-        fileName: `${id}.jpg`,
-      },
-    };
-  }, [capturePreviewBlob, previewUrl, captureDimensions]);
-
   return (
     <div className="flex flex-col w-screen h-screen overflow-hidden relative">
 
@@ -730,7 +600,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       </div>
 
       {/* ── CONTROLS ── */}
-      <div className="relative z-10 flex flex-col items-center gap-5 px-[50px] py-4 mt-[20px] shrink-0">
+      <div className="relative z-30 flex flex-col items-center gap-5 px-[50px] py-4 mt-[20px] shrink-0">
         {/* Shutter button */}
         <button
           className="w-[150px] h-[150px] rounded-full p-[5px] transition-all duration-300 disabled:opacity-50 active:scale-[0.96] shutter-btn-animate"
@@ -748,14 +618,14 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
           <button
             className="flex flex-col items-center min-w-[250px] px-6 py-4 rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.6)] text-[#f0e6ff] font-black transition-all duration-300 hover:bg-[rgba(168,85,247,0.18)] hover:text-white disabled:opacity-50"
             style={{ boxShadow: '0 0 8px rgba(168,85,247,0.18)', border: '1px solid #a855f7' }}
-            onClick={() => setIsCountdownDropdownOpen(!isCountdownDropdownOpen)}
+            onClick={() => setIsCountdownDropdownOpen((prev) => !prev)}
             disabled={timer > 0 || isProcessingCapture}
           >
             <small className="text-[1.1rem] text-[#b8a4d4] uppercase tracking-widest">TIMER</small>
             <strong className="text-[2rem]">{selectedCountdown}s</strong>
           </button>
           {isCountdownDropdownOpen && (
-            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-50 flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)] overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
+            <div className="absolute top-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-[120] flex flex-col min-w-[250px] rounded-xl border border-[#a855f7] bg-[rgba(19,13,30,0.97)] overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(168,85,247,0.22)' }}>
               {[5, 10, 15, 20, 25, 30].map(v => (
                 <button
                   key={v}
@@ -778,15 +648,15 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
             <Webcam
               ref={webcamRef}
               style={{ display: 'none' }}
-              width={PROCESSING_WIDTH}
-              height={PROCESSING_HEIGHT}
-              videoConstraints={{ width: { ideal: PROCESSING_WIDTH }, height: { ideal: PROCESSING_HEIGHT }, facingMode: "user" }}
+              width={frameDimensions.width}
+              height={frameDimensions.height}
+              videoConstraints={{ width: { ideal: 3840, min: 1920 }, height: { ideal: 2160, min: 1080 }, facingMode: "user" }}
             />
             {/* Main Display Canvas */}
             <canvas
               ref={canvasRef}
-              width={PROCESSING_WIDTH}
-              height={PROCESSING_HEIGHT}
+              width={frameDimensions.width}
+              height={frameDimensions.height}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
             {isFlashing && <div className="screen-flash" />}
@@ -814,7 +684,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
                 }`}
                 onClick={() => setTimeout(() => loadBackground(bg), 0)}
               >
-                <img src={bg} alt={bg.split('/').pop() || 'Frame'} draggable="false" loading="lazy" decoding="async" className="h-full w-auto object-contain block" />
+                <img src={bg} alt={bg.split('/').pop() || 'Frame'} draggable="false" className="h-full w-auto object-contain block" />
               </button>
             );
           })}
@@ -834,7 +704,19 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       {captureError && <p className="hidden">{captureError}</p>}
 
       <PreviewScreen
-        imageData={previewImageData}
+        imageData={capturePreviewBlob ? {
+          url: previewUrl || '',
+          blob: capturePreviewBlob, 
+          metadata: {
+            id: uuidv4(),
+            frameId: '',
+            capturedAt: new Date().toISOString(),
+            width: getCaptureDimensions().width,
+            height: getCaptureDimensions().height,
+            size: capturePreviewBlob.size,
+            fileName: `${uuidv4()}.jpg`,
+          },
+        } : null}
         isVisible={showCapturePreview}
         isLoading={isProcessingCapture}
         onRetake={handleRetakeCapture}
