@@ -26,7 +26,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   const FINAL_REMOVAL_MODEL = 'medium'; // Use IMG.LY's medium model preset
   const FINAL_REMOVAL_DEVICE = 'cpu'; // CPU processing
   const FINAL_OUTPUT_MIME = 'image/jpeg';
-  const FINAL_OUTPUT_QUALITY = 0.88; // Balanced quality/speed
+  const FINAL_OUTPUT_QUALITY = 0.95; // Balanced quality/speed
   const ENABLE_REMOVAL_PRELOAD = true;
   const MAX_PROCESSING_WIDTH = 1920; // Cap resolution for faster processing
   const FLIP_HORIZONTAL = true; // mirror camera like a selfie
