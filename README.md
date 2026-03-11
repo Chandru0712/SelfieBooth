@@ -64,6 +64,25 @@ The output will be generated in the `dist` folder. To preview the production bui
 npm run preview
 ```
 
+## 🌐 GitHub Pages Hosting
+
+This project can be published to GitHub Pages at:
+
+```text
+https://chandru0712.github.io/SelfieBooth/
+```
+
+To deploy the current code to GitHub Pages:
+
+```bash
+npm run deploy
+```
+
+This will:
+
+1. Build the app with the correct GitHub Pages base path.
+2. Publish the contents of `dist` to the `gh-pages` branch.
+
 ## 🔧 Environment Setup
 
 If you are using external APIs (such as Hugging Face for AI generative features or a backend API), please ensure to configure the appropriate base URLs or API keys in the `.env` file or within `src/utils/apiService.ts`.
