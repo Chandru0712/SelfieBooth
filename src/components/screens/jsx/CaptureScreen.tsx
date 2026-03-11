@@ -54,11 +54,28 @@ export const CaptureScreen = ({
   const zoomWrapperRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef<boolean>(true);
+  /** Cache of pre-loaded Image objects keyed by frame id — avoids re-fetch on capture */
+  const frameImageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  /** Cache of computed {ratio, width, height} keyed by frame id — instant on revisit */
+  const frameDimensionsCacheRef = useRef<Map<string, { ratio: number; w: string; h: string }>>(new Map());
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => { isMountedRef.current = false; };
   }, []);
+
+  /** Pre-load every frame image into the cache as soon as frames arrive */
+  useEffect(() => {
+    const cache = frameImageCacheRef.current;
+    frames.forEach(frame => {
+      if (!frame.image || cache.has(frame.id)) return;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = frame.image;
+      // Store immediately — the browser will finish loading in the background
+      cache.set(frame.id, img);
+    });
+  }, [frames]);
 
   useEffect(() => {
     if (!frameScrollRef.current || !selectedFrame) return;
@@ -146,9 +163,13 @@ export const CaptureScreen = ({
           } else {
             const selectedFrameData = frames.find((f) => f.id === selectedFrame);
             if (selectedFrameData?.image) {
-              const img = new Image();
-              img.crossOrigin = "anonymous";
-              await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = () => reject(new Error("Failed to load frame")); img.src = selectedFrameData.image; });
+              // Use the pre-loaded cached Image if available
+              const cachedImg = frameImageCacheRef.current.get(selectedFrame);
+              const img = (cachedImg && cachedImg.complete) ? cachedImg : new Image();
+              if (!cachedImg || !cachedImg.complete) {
+                img.crossOrigin = "anonymous";
+                await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = () => reject(new Error("Failed to load frame")); img.src = selectedFrameData.image; });
+              }
               ctx?.drawImage(img, 0, 0, cWidth, cHeight);
             }
           }
@@ -182,6 +203,12 @@ export const CaptureScreen = ({
   const handleRetake = () => {
     if (capturedImage?.url) URL.revokeObjectURL(capturedImage.url);
     setCapturedImage(null); setShowPreview(false); setIsCompressing(false);
+  };
+
+  const handleBack = () => {
+    frameImageCacheRef.current.clear();
+    frameDimensionsCacheRef.current.clear();
+    onBack();
   };
 
   const handleFrameDragStart = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -230,20 +257,49 @@ export const CaptureScreen = ({
     if (selectedFrame === "none" || frames.length === 0) return;
     const selectedFrameObj = frames.find((f) => f.id === selectedFrame);
     if (!selectedFrameObj?.image) return;
-    const computeDimensions = (frameWidth: number, frameHeight: number) => {
-      if (!frameWidth || !frameHeight) return;
-      const ratio = frameWidth / frameHeight;
+
+    const applyDimensions = (ratio: number, w: string, h: string) => {
       setFrameAspectRatio(ratio);
+      setPreviewDimensions({ width: w, height: h });
+    };
+
+    const computeAndApply = (imgW: number, imgH: number) => {
+      if (!imgW || !imgH) return;
+      const ratio = imgW / imgH;
       const maxW = window.innerWidth - 40;
       const maxH = window.innerHeight - 380;
       let targetW = maxW, targetH = targetW / ratio;
       if (targetH > maxH) { targetH = maxH; targetW = targetH * ratio; }
       if (targetH < 250) { targetH = 250; targetW = targetH * ratio; }
-      setPreviewDimensions({ width: `${Math.round(targetW)}px`, height: `${Math.round(targetH)}px` });
+      const w = `${Math.round(targetW)}px`;
+      const h = `${Math.round(targetH)}px`;
+      frameDimensionsCacheRef.current.set(selectedFrame, { ratio, w, h });
+      applyDimensions(ratio, w, h);
     };
-    const cachedImgEl = document.querySelector(`img[src="${selectedFrameObj.image}"]`) as HTMLImageElement;
-    if (cachedImgEl && cachedImgEl.naturalWidth) { computeDimensions(cachedImgEl.naturalWidth, cachedImgEl.naturalHeight); }
-    else { const img = new Image(); img.onload = () => computeDimensions(img.naturalWidth, img.naturalHeight); img.src = selectedFrameObj.image; }
+
+    // 1. Instant path: dimensions already computed for this frame
+    const cached = frameDimensionsCacheRef.current.get(selectedFrame);
+    if (cached) { applyDimensions(cached.ratio, cached.w, cached.h); return; }
+
+    // 2. Fast path: pre-loaded Image is ready — compute synchronously
+    const cachedImg = frameImageCacheRef.current.get(selectedFrame);
+    if (cachedImg && cachedImg.complete && cachedImg.naturalWidth) {
+      computeAndApply(cachedImg.naturalWidth, cachedImg.naturalHeight);
+      return;
+    }
+
+    // 3. Image still loading — wait on the existing cache entry
+    if (cachedImg) {
+      cachedImg.onload = () => computeAndApply(cachedImg.naturalWidth, cachedImg.naturalHeight);
+      return;
+    }
+
+    // 4. Fallback: not in cache yet (shouldn't normally happen)
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    frameImageCacheRef.current.set(selectedFrame, img);
+    img.onload = () => computeAndApply(img.naturalWidth, img.naturalHeight);
+    img.src = selectedFrameObj.image;
   }, [selectedFrame, frames, windowSize]);
 
   useEffect(() => {
@@ -291,7 +347,7 @@ export const CaptureScreen = ({
         <button
           className="w-[125px] h-[125px] rounded-full flex items-center justify-center text-[#f0e6ff] bg-[rgba(60,0,120,0.5)] border-[4px] border-[#a855f7] transition-all duration-300 hover:bg-[rgba(168,85,247,0.22)] hover:text-white"
           style={{ boxShadow: '0 0 15px rgba(168,85,247,0.4), inset 0 0 10px rgba(168,85,247,0.4)' }}
-          onClick={onBack}
+          onClick={handleBack}
         >
           <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ filter: 'drop-shadow(0 0 5px rgba(224,64,251,0.8))' }}>
             <path d="M15 18l-6-6 6-6" />

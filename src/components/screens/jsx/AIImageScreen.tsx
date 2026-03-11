@@ -6,12 +6,6 @@ import { v4 as uuidv4 } from 'uuid';
 import PreviewScreen from './PreviewScreen';
 import CubeSpinner from '../../CubeSpinner';
 
-interface BackgroundRemovalModule {
-  default?: (blob: Blob, config: any) => Promise<Blob>;
-  removeBackground?: (blob: Blob, config: any) => Promise<Blob>;
-  preload?: (config: any) => Promise<void>;
-}
-
 interface AIImageScreenProps {
   category?: string;
   onBack?: () => void;
@@ -23,12 +17,8 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   // Segmentation tuning variables (change these and rebuild as needed)
   const MASK_THRESHOLD = 0.7; // 0.0 to 1.0 (lowered for better edge detection)
   const MASK_EDGE_BLUR_PX = 5; // Reduced blur for sharper edges and faster processing
-  const FINAL_REMOVAL_MODEL = 'medium'; // Use IMG.LY's medium model preset
-  const FINAL_REMOVAL_DEVICE = 'cpu'; // CPU processing
-  const FINAL_OUTPUT_MIME = 'image/jpeg';
-  const FINAL_OUTPUT_QUALITY = 0.95; // Balanced quality/speed
-  const ENABLE_REMOVAL_PRELOAD = true;
-  const MAX_PROCESSING_WIDTH = 1920; // Cap resolution for faster processing
+  const FINAL_OUTPUT_MIME = 'image/png';
+  const FINAL_OUTPUT_QUALITY = 0.95;
   const FLIP_HORIZONTAL = true; // mirror camera like a selfie
   const MEDIAPIPE_BASE_URL = '/models/';
   const MEDIAPIPE_ASSET_VERSION = '2026-02-16';
@@ -107,7 +97,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   const activeBackgroundRef = useRef<HTMLImageElement | null>(null);
   const rawMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const thresholdMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const backgroundRemovalModuleRef = useRef<BackgroundRemovalModule | null>(null);
+  const latestThresholdMaskRef = useRef<HTMLCanvasElement | null>(null);
   const processingStartRef = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const frameScrollRef = useRef<HTMLDivElement>(null);
@@ -248,10 +238,13 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
 
 
-  const composeForegroundWithBackground = async (foregroundBlob: Blob, dims: { width: number; height: number }): Promise<HTMLCanvasElement> => {
-    const foregroundImage = await blobToImage(foregroundBlob);
-    
-    // Fill to the maximal captured resolution bounds
+  const composeTransparentForeground = async (sourceFrameBlob: Blob, dims: { width: number; height: number }): Promise<HTMLCanvasElement> => {
+    const sourceImage = await blobToImage(sourceFrameBlob);
+    const maskCanvas = latestThresholdMaskRef.current;
+    if (!maskCanvas) {
+      throw new Error('Segmentation mask is not ready yet.');
+    }
+
     const width = dims.width;
     const height = dims.height;
 
@@ -267,27 +260,19 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     exportCtx.imageSmoothingEnabled = true;
     exportCtx.imageSmoothingQuality = 'high';
 
-    const activeBackground = activeBackgroundRef.current;
-
-    // Draw background first
-    if (activeBackground) {
-      exportCtx.drawImage(activeBackground, 0, 0, width, height);
-    } else {
-      exportCtx.fillStyle = '#00FF00';
-      exportCtx.fillRect(0, 0, width, height);
+    // Draw mask first, then keep only source-frame pixels under opaque mask regions.
+    if (FLIP_HORIZONTAL) {
+      exportCtx.translate(width, 0);
+      exportCtx.scale(-1, 1);
     }
+    exportCtx.drawImage(maskCanvas, 0, 0, width, height);
+    exportCtx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // Draw foreground (cutout person) on top
-    exportCtx.drawImage(foregroundImage, 0, 0, width, height);
+    exportCtx.globalCompositeOperation = 'source-in';
+    exportCtx.drawImage(sourceImage, 0, 0, width, height);
+    exportCtx.globalCompositeOperation = 'source-over';
     return exportCanvas;
   };
-
-  const getBackgroundRemovalModule = useCallback(async (): Promise<BackgroundRemovalModule> => {
-    if (!backgroundRemovalModuleRef.current) {
-      backgroundRemovalModuleRef.current = await import('@imgly/background-removal') as any;
-    }
-    return backgroundRemovalModuleRef.current!;
-  }, []);
 
   const getThresholdMask = useCallback((segmentationMask: CanvasImageSource, width: number, height: number): HTMLCanvasElement => {
     if (!rawMaskCanvasRef.current) rawMaskCanvasRef.current = document.createElement('canvas');
@@ -349,6 +334,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
     // Draw thresholded/feathered mask
     const thresholdMask = getThresholdMask(results.segmentationMask, width, height);
+    latestThresholdMaskRef.current = thresholdMask;
     if (MASK_EDGE_BLUR_PX > 0) {
       ctx.filter = `blur(${MASK_EDGE_BLUR_PX}px)`;
     }
@@ -436,30 +422,6 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     loadBackground(backgroundList[0]);
   }, [backgroundList, loadBackground]);
 
-  useEffect(() => {
-    if (!ENABLE_REMOVAL_PRELOAD) return;
-
-    let cancelled = false;
-    const preloadRemovalModel = async (): Promise<void> => {
-      try {
-        const backgroundRemovalModule = await getBackgroundRemovalModule();
-        const preload = backgroundRemovalModule?.preload;
-        if (cancelled || typeof preload !== 'function') return;
-        await preload({
-          model: FINAL_REMOVAL_MODEL,
-          device: FINAL_REMOVAL_DEVICE
-        });
-      } catch (error) {
-        console.warn('Background removal preload failed. Will load on first capture.', error);
-      }
-    };
-
-    preloadRemovalModel();
-    return (): void => {
-      cancelled = true;
-    };
-  }, [ENABLE_REMOVAL_PRELOAD, FINAL_REMOVAL_DEVICE, FINAL_REMOVAL_MODEL, getBackgroundRemovalModule]);
-
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent): void => {
@@ -506,12 +468,6 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
        height = width / aspect;
     }
 
-    // Cap resolution for faster AI processing
-    if (width > MAX_PROCESSING_WIDTH) {
-      width = MAX_PROCESSING_WIDTH;
-      height = width / aspect;
-    }
-
     return { width: Math.round(width), height: Math.round(height) };
   };
 
@@ -534,30 +490,9 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       await waitForPaint();
       const dims = getCaptureDimensions();
       const rawFrameBlob = await captureRawVideoFrameBlob(dims);
-      const backgroundRemovalModule = await getBackgroundRemovalModule();
-      const removeBackground = backgroundRemovalModule?.default || backgroundRemovalModule?.removeBackground;
 
-      if (typeof removeBackground !== 'function') {
-        throw new Error('Background removal API is unavailable.');
-      }
-
-      const config = {
-        model: FINAL_REMOVAL_MODEL,
-        device: FINAL_REMOVAL_DEVICE,
-        proxyToWorker: true, // Offload to worker thread
-        output: {
-          format: 'image/png',
-          quality: FINAL_OUTPUT_QUALITY,
-          type: 'foreground'
-        },
-        progress: undefined // Disable progress callback for better performance
-      };
-
-      // Remove background using IMG.LY
-      const foregroundBlob = await removeBackground(rawFrameBlob, config);
-
-      // Composite the cutout with the selected background
-      const finalCanvas = await composeForegroundWithBackground(foregroundBlob, dims);
+      // Build transparent foreground directly from the live MediaPipe mask.
+      const finalCanvas = await composeTransparentForeground(rawFrameBlob, dims);
       const finalBlob = await canvasToBlob(finalCanvas, FINAL_OUTPUT_MIME, FINAL_OUTPUT_QUALITY);
       
       // Show preview instead of downloading immediately
@@ -569,7 +504,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       setShowCapturePreview(true);
     } catch (error) {
       console.error('Foreground capture failed.', error);
-      setCaptureError('Masking failed. Please try again.');
+      setCaptureError('Transparent capture failed. Please try again.');
     } finally {
       setIsProcessingCapture(false);
       if (processingStartRef.current !== null) {
@@ -722,7 +657,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
             width: getCaptureDimensions().width,
             height: getCaptureDimensions().height,
             size: capturePreviewBlob.size,
-            fileName: `${uuidv4()}.jpg`,
+            fileName: `${uuidv4()}.png`,
           },
         } : null}
         isVisible={showCapturePreview}
