@@ -61,12 +61,14 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   const PROCESSING_WIDTH = 1280;
   const PROCESSING_HEIGHT = 720;
   const MAX_EXPORT_WIDTH = 1280;
+  const PROCESSING_OVERLAY_SECONDS = 60;
 
   const [timer, setTimer] = useState<number>(0);
   const [selectedCountdown, setSelectedCountdown] = useState<number>(5);
   const [isCountdownDropdownOpen, setIsCountdownDropdownOpen] = useState<boolean>(false);
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
   const [isProcessingCapture, setIsProcessingCapture] = useState<boolean>(false);
+  const [processingOverlayKey, setProcessingOverlayKey] = useState<number>(0);
   const [removalDevice, setRemovalDevice] = useState<'gpu' | 'cpu'>('cpu');
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [processingTimeMs, setProcessingTimeMs] = useState<number | null>(null);
@@ -130,6 +132,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       clearTimeout(resizeTimeout);
     };
   }, [frameDimensions.width, frameDimensions.height]);
+
   const [showCapturePreview, setShowCapturePreview] = useState<boolean>(false);
   const [capturePreviewBlob, setCapturePreviewBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -657,6 +660,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     // Step 2: Wait for flash animation to complete (300ms), then show processing overlay
     await new Promise(resolve => setTimeout(resolve, 0));
     setIsFlashing(false);
+    setProcessingOverlayKey((prev) => prev + 1);
     setIsProcessingCapture(true);
     processingStartRef.current = performance.now();
 
@@ -760,6 +764,11 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       },
     };
   }, [capturePreviewBlob, previewUrl, captureDimensions]);
+
+  const processingCountdownValues = React.useMemo(
+    () => Array.from({ length: PROCESSING_OVERLAY_SECONDS + 1 }, (_, index) => PROCESSING_OVERLAY_SECONDS - index),
+    [PROCESSING_OVERLAY_SECONDS]
+  );
 
   return (
     <div className="flex flex-col w-screen h-screen overflow-hidden relative">
@@ -876,8 +885,41 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
         <div className="fixed inset-0 z-[10005] flex items-center justify-center flex-col bg-[#0c0812]" style={{ backdropFilter: 'blur(20px)' }}>
           <CubeSpinner />
           <div className="text-white text-[5rem] mt-5 font-bold tracking-widest z-10 pt-20" style={{ textShadow: '0 0 20px rgba(168,85,247,0.8)' }}>PROCESSING...</div>
+          <div className="text-[#d9b8ff] text-[3rem] mt-4 font-semibold tracking-[0.2em] z-10 h-[1.2em] overflow-hidden" style={{ textShadow: '0 0 16px rgba(168,85,247,0.55)' }}>
+            <div
+              key={processingOverlayKey}
+              style={{
+                animation: `processingCountdownScroll ${PROCESSING_OVERLAY_SECONDS}s steps(${PROCESSING_OVERLAY_SECONDS}, end) forwards`,
+                willChange: 'transform',
+              }}
+            >
+              {processingCountdownValues.map((value) => (
+                <div
+                  key={value}
+                  style={{
+                    height: '1.2em',
+                    lineHeight: '1.2em',
+                    textAlign: 'center',
+                  }}
+                >
+                  {value}s
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes processingCountdownScroll {
+          from {
+            transform: translateY(0);
+          }
+          to {
+            transform: translateY(-72em);
+          }
+        }
+      `}</style>
 
       {/* Hidden status readouts */}
       {processingTimeMs !== null && <p className="hidden">Processed in {(processingTimeMs / 1000).toFixed(2)}s</p>}
