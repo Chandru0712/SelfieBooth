@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, memo } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { ImageData } from '../../../types';
 import { uploadImageAndGenerateQR } from '../../../utils/apiService.ts';
@@ -21,12 +21,7 @@ export const PreviewScreen = memo(function PreviewScreen({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (imageData?.url) { try { URL.revokeObjectURL(imageData.url); } catch { /* ignore */ } }
-    };
-  }, [imageData?.url]);
+  const [imageLoadError, setImageLoadError] = useState<string | null>(null);
 
   if (!isVisible || !imageData) return null;
 
@@ -61,11 +56,25 @@ export const PreviewScreen = memo(function PreviewScreen({
       {/* Body */}
       <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
         {/* Image */}
-        <div className="flex-1 flex flex-col items-center overflow-auto px-3 pt-[220px]">
+        <div className="flex-1 flex flex-col items-center overflow-auto px-3 pt-[100px]">
+          {imageLoadError && (
+            <div className="text-red-500 text-center py-10">
+              <p className="text-2xl font-bold mb-4">Failed to load image</p>
+              <p className="text-lg">{imageLoadError}</p>
+              <p className="text-sm mt-4 text-gray-400">URL: {imageData.url || '(empty)'}</p>
+            </div>
+          )}
           <img
-            src={uploadedImageUrl || imageData.url}
+            src={uploadedImageUrl || imageData?.url || ''}
             alt="Captured preview"
-            className="w-full max-h-[50vh] object-contain object-top mt-[3%]"
+            className={`w-full max-h-[50vh] object-contain object-top mt-[3%] ${imageLoadError ? 'hidden' : ''}`}
+            onLoad={() => {
+              setImageLoadError(null);
+            }}
+            onError={(e) => {
+              console.error('Image load error:', e);
+              setImageLoadError(`Cannot load image. URL: ${(e.target as HTMLImageElement).src}`);
+            }}
           />
           {/* QR Code after upload */}
           {uploadedImageUrl && !isProcessing && (

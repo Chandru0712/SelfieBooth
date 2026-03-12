@@ -21,53 +21,28 @@ interface AIImageScreenProps {
 
 type BgModuleLoader = () => Promise<{ default?: string } | string>;
 
-// Detect the fastest inference device supported by @imgly/background-removal.
-// The library only accepts 'cpu' | 'gpu'. 'gpu' covers both WebGPU and WebGL.
-async function detectBestDevice(): Promise<'gpu' | 'cpu'> {
-  try {
-    if (
-      typeof navigator !== 'undefined' &&
-      'gpu' in navigator &&
-      typeof (navigator as any).gpu?.requestAdapter === 'function'
-    ) {
-      const adapter = await (navigator as any).gpu.requestAdapter();
-      if (adapter) {
-        console.info('[BgRemoval] WebGPU adapter found — using gpu device.');
-        return 'gpu';
-      }
-    }
-  } catch { /* ignore */ }
-  try {
-    const canvas = document.createElement('canvas');
-    if (canvas.getContext('webgl2') || canvas.getContext('webgl')) {
-      console.info('[BgRemoval] WebGL found — using gpu device.');
-      return 'gpu';
-    }
-  } catch { /* ignore */ }
-  return 'cpu';
-}
-
 function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): React.JSX.Element {
   // Segmentation tuning variables (change these and rebuild as needed)
   const MASK_THRESHOLD = 0.7; // 0.0 to 1.0 (lowered for better edge detection)
-  const MASK_EDGE_BLUR_PX = 0;
-  const FINAL_REMOVAL_MODEL = 'medium';
+  const MASK_EDGE_BLUR_PX = 2;
+  const FINAL_REMOVAL_MODEL = 'medium'; // Use 'medium' for better compatibility (isnet requires local hosting)
+  const FINAL_REMOVAL_DEVICE = 'cpu'; // Use CPU for better compatibility
   const FINAL_OUTPUT_MIME = 'image/jpeg';
-  const FINAL_OUTPUT_QUALITY = 1;
+  const FINAL_OUTPUT_QUALITY = 0.95;
   const ENABLE_IMGLY_PRELOAD = true;
   const FLIP_HORIZONTAL = true; // mirror camera like a selfie
   const MEDIAPIPE_BASE_URL = '/models/';
   const MEDIAPIPE_ASSET_VERSION = '2026-02-16';
   const PROCESSING_WIDTH = 1280;
   const PROCESSING_HEIGHT = 720;
-  const MAX_EXPORT_WIDTH = 1280;
+  const MAX_EXPORT_WIDTH = 1920;
 
   const [timer, setTimer] = useState<number>(0);
   const [selectedCountdown, setSelectedCountdown] = useState<number>(5);
   const [isCountdownDropdownOpen, setIsCountdownDropdownOpen] = useState<boolean>(false);
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
   const [isProcessingCapture, setIsProcessingCapture] = useState<boolean>(false);
-  const [removalDevice, setRemovalDevice] = useState<'gpu' | 'cpu'>('cpu');
+  const [processingProgress, setProcessingProgress] = useState<number>(0);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [processingTimeMs, setProcessingTimeMs] = useState<number | null>(null);
   const [activeBackgroundName, setActiveBackgroundName] = useState<string | null>(null);
@@ -143,9 +118,6 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   const resizedBackgroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const isSegmentationBusyRef = useRef(false);
   const imglyModuleRef = useRef<ImglyModule | null>(null);
-  const removalDeviceRef = useRef<'gpu' | 'cpu'>('cpu');
-  const preloadPromiseRef = useRef<Promise<void> | null>(null);
-  const isCapturingRef = useRef(false);
   const processingStartRef = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const frameScrollRef = useRef<HTMLDivElement>(null);
@@ -329,8 +301,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     }
 
     frameCtx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
-    // Use PNG (lossless) as model input — avoids JPEG artefacts in the alpha mask
-    return canvasToBlob(frameCanvas, 'image/png', 1);
+    return canvasToBlob(frameCanvas, FINAL_OUTPUT_MIME, FINAL_OUTPUT_QUALITY);
   };
 
 
@@ -352,7 +323,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     }
 
     exportCtx.imageSmoothingEnabled = true;
-    exportCtx.imageSmoothingQuality = 'medium';
+    exportCtx.imageSmoothingQuality = 'high';
 
     const activeBackground = activeBackgroundRef.current;
 
@@ -371,14 +342,6 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     }
     return exportCanvas;
   };
-
-  // Use CPU device (no GPU detection)
-  useEffect(() => {
-    const device = 'cpu';
-    removalDeviceRef.current = device;
-    setRemovalDevice(device);
-    console.info('[BgRemoval] Using device:', device);
-  }, []);
 
   const getImglyModule = useCallback(async (): Promise<ImglyModule> => {
     if (!imglyModuleRef.current) {
@@ -547,7 +510,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
         if (cancelled || typeof preload !== 'function') return;
         await preload({
           model: FINAL_REMOVAL_MODEL,
-          device: removalDeviceRef.current,
+          device: FINAL_REMOVAL_DEVICE
         });
       } catch (error) {
         console.warn('IMG.LY preload failed. Will load on first capture.', error);
@@ -562,12 +525,10 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     let idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
     if (typeof browserWindow.requestIdleCallback === 'function') {
       idleCallbackId = browserWindow.requestIdleCallback(() => {
-        preloadPromiseRef.current = preloadImgly();
+        preloadImgly();
       }, { timeout: 1500 });
     } else {
-      idleTimeoutId = globalThis.setTimeout(() => {
-        preloadPromiseRef.current = preloadImgly();
-      }, 250);
+      idleTimeoutId = globalThis.setTimeout(preloadImgly, 250);
     }
 
     return (): void => {
@@ -579,7 +540,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
         globalThis.clearTimeout(idleTimeoutId);
       }
     };
-  }, [ENABLE_IMGLY_PRELOAD, FINAL_REMOVAL_MODEL, getImglyModule, removalDevice]);
+  }, [ENABLE_IMGLY_PRELOAD, FINAL_REMOVAL_DEVICE, FINAL_REMOVAL_MODEL, getImglyModule]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -643,32 +604,23 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   };
 
   const captureAndSave = async (): Promise<void> => {
-    if (isCapturingRef.current) return;
-    isCapturingRef.current = true;
-
     const previewCanvas = canvasRef.current;
-    if (!previewCanvas) { isCapturingRef.current = false; return; }
+    if (!previewCanvas) return;
 
     // Step 1: Trigger the white camera flash
     setIsFlashing(true);
     setCaptureError(null);
     setProcessingTimeMs(null);
+    setProcessingProgress(0);
 
     // Step 2: Wait for flash animation to complete (300ms), then show processing overlay
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 350));
     setIsFlashing(false);
     setIsProcessingCapture(true);
     processingStartRef.current = performance.now();
 
     try {
       await waitForPaint();
-
-      // Wait for any in-flight preload to finish before starting inference
-      if (preloadPromiseRef.current) {
-        await preloadPromiseRef.current.catch(() => {});
-        preloadPromiseRef.current = null;
-      }
-
       const dims = getCaptureDimensions();
       setCaptureDimensions(dims);
 
@@ -684,11 +636,16 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
       const config = {
         model: FINAL_REMOVAL_MODEL,
-        device: removalDeviceRef.current,
+        device: FINAL_REMOVAL_DEVICE,
         output: {
           format: 'image/png',
-          quality: 1,
-          type: 'foreground',
+          quality: FINAL_OUTPUT_QUALITY,
+          type: 'foreground'
+        },
+        progress: (key: string, current: number, total: number) => {
+          if (total > 0) {
+            setProcessingProgress(Math.min(99, Math.round((current / total) * 100)));
+          }
         },
       };
 
@@ -697,6 +654,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
       // Composite the cutout with the selected background
       const finalCanvas = await composeForegroundWithBackground(foregroundBlob, dims);
+      setProcessingProgress(100);
       const finalBlob = await canvasToBlob(finalCanvas, FINAL_OUTPUT_MIME, FINAL_OUTPUT_QUALITY);
       
       // Show preview instead of downloading immediately
@@ -707,7 +665,6 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       console.error('Foreground capture failed.', error);
       setCaptureError('Masking failed. Please try again.');
     } finally {
-      isCapturingRef.current = false;
       setIsProcessingCapture(false);
       if (processingStartRef.current !== null) {
         setProcessingTimeMs(Math.round(performance.now() - processingStartRef.current));
@@ -876,6 +833,29 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
         <div className="fixed inset-0 z-[10005] flex items-center justify-center flex-col bg-[#0c0812]" style={{ backdropFilter: 'blur(20px)' }}>
           <CubeSpinner />
           <div className="text-white text-[5rem] mt-5 font-bold tracking-widest z-10 pt-20" style={{ textShadow: '0 0 20px rgba(168,85,247,0.8)' }}>PROCESSING...</div>
+
+          {/* Progress bar */}
+          <div className="mt-8 flex flex-col items-center gap-3" style={{ width: '420px' }}>
+            <div className="w-full rounded-full overflow-hidden" style={{ height: '10px', background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)' }}>
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${processingProgress}%`,
+                  background: 'linear-gradient(90deg, #7e22ce, #a855f7, #e879f9)',
+                  boxShadow: '0 0 12px rgba(168,85,247,0.7)',
+                  transition: 'width 0.3s ease',
+                }}
+              />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-black text-[3.5rem] text-white" style={{ textShadow: '0 0 16px rgba(168,85,247,0.9)', fontVariantNumeric: 'tabular-nums' }}>
+                {processingProgress}%
+              </span>
+              <span className="text-[1.4rem] text-[#b8a4d4] tracking-widest uppercase">
+                {processingProgress >= 100 ? 'Finalizing…' : 'Removing background…'}
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
