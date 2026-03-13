@@ -10,6 +10,9 @@ export default defineConfig({
   server: {
     host: true,
     https: true,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+    },
      // Allows access from network devices
     // WASM files are automatically served with correct MIME type
     proxy: {
@@ -43,6 +46,11 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     cssCodeSplit: true,
     assetsInlineLimit: 4096,
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+    },
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'uuid'],

@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, memo } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { ImageData } from '../../../types';
 import { uploadImageAndGenerateQR } from '../../../utils/apiService.ts';
@@ -19,29 +19,28 @@ export const PreviewScreen = memo(function PreviewScreen({
   onContinue: _onContinue = () => {},
 }: PreviewScreenProps) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (imageData?.url) { try { URL.revokeObjectURL(imageData.url); } catch { /* ignore */ } }
-    };
-  }, [imageData?.url]);
 
   if (!isVisible || !imageData) return null;
 
   const handleContinue = async () => {
     try {
-      setIsProcessing(true); setError(null); setUploadedImageUrl(null);
+      setIsProcessing(true); setUploadedImageUrl(null);
       const uploadResult = await uploadImageAndGenerateQR(imageData.blob, imageData.metadata.fileName);
-      if (!uploadResult.success) { setError(uploadResult.error || 'Upload failed. Please try again.'); return; }
-      if (!uploadResult.imageUrl) { setError('Upload successful but no image URL returned'); return; }
+      if (!uploadResult.success) {
+        console.error('Upload failed:', uploadResult.error || 'Unknown error');
+        return;
+      }
+      if (!uploadResult.imageUrl) {
+        console.error('Upload successful but no image URL returned');
+        return;
+      }
       setUploadedImageUrl(uploadResult.imageUrl);
-    } catch { setError('Failed to upload image. Please try again.'); }
+    } catch (err) { console.error('Failed to upload image:', err); }
     finally { setIsProcessing(false); }
   };
 
-  const handleRetake = () => { setError(null); setUploadedImageUrl(null); onRetake(); };
+  const handleRetake = () => { setUploadedImageUrl(null); onRetake(); };
 
   /* ─── Button styles ─── */
   const btnBase = "inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-[30px] font-bold text-[22px] uppercase tracking-[0.5px] transition-all duration-300 min-w-[280px] text-center";
@@ -61,11 +60,14 @@ export const PreviewScreen = memo(function PreviewScreen({
       {/* Body */}
       <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
         {/* Image */}
-        <div className="flex-1 flex flex-col items-center overflow-auto px-3 pt-[220px]">
+        <div className="flex-1 flex flex-col items-center overflow-auto px-3 pt-[100px]">
           <img
-            src={uploadedImageUrl || imageData.url}
+            src={uploadedImageUrl || imageData?.url || ''}
             alt="Captured preview"
             className="w-full max-h-[50vh] object-contain object-top mt-[3%]"
+            onError={(e) => {
+              console.error('Image load error:', e);
+            }}
           />
           {/* QR Code after upload */}
           {uploadedImageUrl && !isProcessing && (
@@ -95,13 +97,6 @@ export const PreviewScreen = memo(function PreviewScreen({
           </button>
         </div>
       </div>
-
-      {/* Error toast */}
-      {error && (
-        <div className="fixed bottom-[200px] left-1/2 -translate-x-1/2 bg-[rgba(239,68,68,0.9)] text-white px-6 py-3 rounded-lg text-sm z-[2001] max-w-[80%]">
-          {error}
-        </div>
-      )}
     </div>
   );
 });

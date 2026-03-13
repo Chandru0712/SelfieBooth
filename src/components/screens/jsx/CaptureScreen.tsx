@@ -192,7 +192,7 @@ export const CaptureScreen = ({
 
         if (isMountedRef.current) { setCapturedImage(finalImageState); setIsProcessing(false); setShowPreview(true); }
       } catch (err) {
-        alert((err as Error).message || "Failed to capture image. Please try again.");
+        console.error("Capture failed:", err);
         if (isMountedRef.current) setIsProcessing(false);
       } finally {
         if (isMountedRef.current) setIsCapturing(false);
@@ -423,7 +423,7 @@ export const CaptureScreen = ({
       </div>
 
       {/* ── CAMERA PREVIEW ── */}
-      <div className="relative z-10 flex items-start justify-center relative px-[10px] mt-[10px]">
+      <div className="relative z-10 flex items-start justify-center px-[10px] mt-[10px]">
         <div style={{ width: previewDimensions.width, height: previewDimensions.height, position: 'relative', margin: '0 auto', flexShrink: 0 }}>
           <div className="relative rounded-[24px] overflow-hidden bg-black w-full h-full" style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }} ref={previewContainerRef}>
             <video

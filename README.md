@@ -16,7 +16,7 @@ An AI-powered interactive Selfie Booth web application built with React, Vite, a
 - **Framework:** React 19, Vite
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS (v4)
-- **AI Models:** MediaPipe Selfie Segmentation, ONNX Runtime Web, Img.ly Background Removal
+- **AI Models:** MediaPipe Selfie Segmentation, Img.ly Background Removal
 - **Utilities:** `browser-image-compression`, `uuid`
 
 ## 🛠️ Installation
@@ -34,11 +34,7 @@ An AI-powered interactive Selfie Booth web application built with React, Vite, a
    npm install
    ```
 
-3. Download required AI models:
-   _(This step might run automatically via the `postinstall` script)_
-   ```bash
-   node download-models.mjs
-   ```
+3. Start the app (MediaPipe assets are loaded from CDN at runtime).
 
 ## 💻 Development
 
@@ -63,25 +59,6 @@ The output will be generated in the `dist` folder. To preview the production bui
 ```bash
 npm run preview
 ```
-
-## 🌐 GitHub Pages Hosting
-
-This project can be published to GitHub Pages at:
-
-```text
-https://chandru0712.github.io/SelfieBooth/
-```
-
-To deploy the current code to GitHub Pages:
-
-```bash
-npm run deploy
-```
-
-This will:
-
-1. Build the app with the correct GitHub Pages base path.
-2. Publish the contents of `dist` to the `gh-pages` branch.
 
 ## 🔧 Environment Setup
 
