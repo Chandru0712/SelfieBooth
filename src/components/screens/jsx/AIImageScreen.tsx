@@ -41,6 +41,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   const [isCountdownDropdownOpen, setIsCountdownDropdownOpen] = useState<boolean>(false);
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
   const [isProcessingCapture, setIsProcessingCapture] = useState<boolean>(false);
+  const [processingCountdownKey, setProcessingCountdownKey] = useState<number>(0);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [processingTimeMs, setProcessingTimeMs] = useState<number | null>(null);
   const [activeBackgroundName, setActiveBackgroundName] = useState<string | null>(null);
@@ -110,6 +111,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   const webcamRef = useRef<Webcam>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const processingCountdownReelRef = useRef<HTMLDivElement | null>(null);
   const activeBackgroundRef = useRef<HTMLImageElement | null>(null);
   const rawMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const thresholdMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -122,6 +124,32 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   const processingStartRef = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const frameScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isProcessingCapture) return;
+
+    const reel = processingCountdownReelRef.current;
+    if (!reel) return;
+
+    const STEP_HEIGHT = 56;
+    reel.style.transform = 'translateY(0px)';
+
+    const animation = reel.animate(
+      [
+        { transform: 'translateY(0px)' },
+        { transform: `translateY(-${STEP_HEIGHT * 60}px)` },
+      ],
+      {
+        duration: 60000,
+        easing: 'steps(60, end)',
+        fill: 'forwards',
+      }
+    );
+
+    return () => {
+      animation.cancel();
+    };
+  }, [isProcessingCapture, processingCountdownKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -623,6 +651,8 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     await new Promise(resolve => setTimeout(resolve, 0));
     setIsFlashing(false);
     setIsProcessingCapture(true);
+    setProcessingCountdownKey((prev) => prev + 1);
+
     processingStartRef.current = performance.now();
 
     try {
@@ -841,6 +871,22 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
         <div className="fixed inset-0 z-[10005] flex items-center justify-center flex-col bg-[#0c0812]" style={{ backdropFilter: 'blur(20px)' }}>
           <CubeSpinner />
           <div className="text-white text-[5rem] mt-5 font-bold tracking-widest z-10 pt-20" style={{ textShadow: '0 0 20px rgba(168,85,247,0.8)' }}>PROCESSING...</div>
+          <div className="z-10 mt-8 overflow-hidden" style={{ height: '56px' }}>
+            <div
+              ref={processingCountdownReelRef}
+              className="text-white text-[3rem] font-bold tracking-wider"
+              style={{
+                textShadow: '0 0 16px rgba(168,85,247,0.7)',
+                willChange: 'transform',
+              }}
+            >
+              {Array.from({ length: 61 }, (_, i) => 60 - i).map((value) => (
+                <div key={value} className="h-[56px] leading-[56px] text-center">
+                  {value}s
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
