@@ -6,12 +6,6 @@ import { v4 as uuidv4 } from 'uuid';
 import PreviewScreen from './PreviewScreen';
 import CubeSpinner from '../../CubeSpinner';
 
-interface ImglyModule {
-  default?: (blob: Blob, config: any) => Promise<Blob>;
-  removeBackground?: (blob: Blob, config: any) => Promise<Blob>;
-  preload?: (config: any) => Promise<void>;
-}
-
 interface AIImageScreenProps {
   category?: string;
   onBack?: () => void;
@@ -23,24 +17,30 @@ type BgModuleLoader = () => Promise<{ default?: string } | string>;
 
 function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, isLoading }: AIImageScreenProps): React.JSX.Element {
   // Segmentation tuning variables (change these and rebuild as needed)
-  const MASK_THRESHOLD = 0.7; // 0.0 to 1.0 (lowered for better edge detection)
-  const MASK_EDGE_BLUR_PX = 0;
+  const MASK_THRESHOLD = 0.2; // 0.0 to 1.0 (lowered for better edge detection)
+  const MASK_SOFTNESS = 0.1; // small transition band around threshold for smoother hair/edge detail
+  const MASK_EDGE_BLUR_PX = 1;
   const FINAL_REMOVAL_MODEL = 'medium';
   const FINAL_OUTPUT_MIME = 'image/jpeg';
-  const FINAL_OUTPUT_QUALITY = 1;
-  const ENABLE_IMGLY_PRELOAD = true;
+  const FINAL_OUTPUT_QUALITY = 0.98;
   const FLIP_HORIZONTAL = true; // mirror camera like a selfie
   const MEDIAPIPE_BASE_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/';
   const MEDIAPIPE_ASSET_VERSION = '2026-02-16';
-  const PROCESSING_WIDTH = 1280;
-  const PROCESSING_HEIGHT = 720;
-  const MAX_EXPORT_WIDTH = 1280;
+  const PROCESSING_WIDTH = 2560;
+  const PROCESSING_HEIGHT = 1440;
+  const MAX_EXPORT_WIDTH = 2560;
+  const REMOVAL_MAX_DIMENSION = 1280;
+  const CINEMATIC_BACKGROUND_FILTER = 'contrast(1.08) saturate(1.08) brightness(0.94)';
+  const CINEMATIC_SUBJECT_FILTER = 'contrast(1.05) saturate(1.06) brightness(1.02)';
+  const CINEMATIC_VIGNETTE_ALPHA = 0.24;
+  const CINEMATIC_HIGHLIGHT_ALPHA = 0.12;
 
   const [timer, setTimer] = useState<number>(0);
   const [selectedCountdown, setSelectedCountdown] = useState<number>(5);
   const [isCountdownDropdownOpen, setIsCountdownDropdownOpen] = useState<boolean>(false);
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
   const [isProcessingCapture, setIsProcessingCapture] = useState<boolean>(false);
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(true);
   const [processingCountdownKey, setProcessingCountdownKey] = useState<number>(0);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [processingTimeMs, setProcessingTimeMs] = useState<number | null>(null);
@@ -117,9 +117,9 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
   const thresholdMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const resizedBackgroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const isSegmentationBusyRef = useRef(false);
-  const imglyModuleRef = useRef<ImglyModule | null>(null);
-  const removalDeviceRef = useRef<'cpu'>('cpu');
-  const preloadPromiseRef = useRef<Promise<void> | null>(null);
+  const workerRef = useRef<Worker | null>(null);
+  const pendingCallbacksRef = useRef<Map<number, { resolve: (b: Blob) => void; reject: (e: Error) => void }>>(new Map());
+  const pendingCallbackIdRef = useRef<number>(0);
   const isCapturingRef = useRef(false);
   const processingStartRef = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -153,7 +153,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
   useEffect(() => {
     let cancelled = false;
-    const loaders = import.meta.glob('../../../assets/Frames/WildLife/*.webp', {
+    const loaders = import.meta.glob('../../../assets/Frames/WildLife/*.{webp,png}', {
       query: '?url'
     }) as Record<string, BgModuleLoader>;
 
@@ -293,6 +293,44 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     return await blobToImage(blob);
   };
 
+  const closeDrawable = (drawable: ImageBitmap | HTMLImageElement): void => {
+    if ('close' in drawable && typeof drawable.close === 'function') {
+      drawable.close();
+    }
+  };
+
+  const getRemovalDimensions = (dims: { width: number; height: number }): { width: number; height: number } => {
+    const longestSide = Math.max(dims.width, dims.height);
+    if (longestSide <= REMOVAL_MAX_DIMENSION) {
+      return dims;
+    }
+
+    const scale = REMOVAL_MAX_DIMENSION / longestSide;
+    return {
+      width: Math.max(2, Math.round(dims.width * scale)),
+      height: Math.max(2, Math.round(dims.height * scale)),
+    };
+  };
+
+  const resizeBlob = async (blob: Blob, dims: { width: number; height: number }): Promise<Blob> => {
+    const drawable = await blobToDrawable(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = dims.width;
+    canvas.height = dims.height;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      closeDrawable(drawable);
+      throw new Error('Could not create resize context.');
+    }
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(drawable, 0, 0, dims.width, dims.height);
+    closeDrawable(drawable);
+    return canvasToBlob(canvas, 'image/png', 1);
+  };
+
   const captureRawVideoFrameBlob = async (dims: { width: number; height: number }): Promise<Blob> => {
     const video = webcamRef.current?.video;
     if (!video || video.readyState < 2) {
@@ -334,10 +372,15 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     return canvasToBlob(frameCanvas, 'image/png', 1);
   };
 
-
-
-  const composeForegroundWithBackground = async (foregroundBlob: Blob, dims: { width: number; height: number }): Promise<HTMLCanvasElement> => {
-    const foregroundImage = await blobToDrawable(foregroundBlob);
+  const composeForegroundWithBackground = async (
+    foregroundBlob: Blob,
+    sourceBlob: Blob,
+    dims: { width: number; height: number }
+  ): Promise<HTMLCanvasElement> => {
+    const [foregroundImage, sourceImage] = await Promise.all([
+      blobToDrawable(foregroundBlob),
+      blobToDrawable(sourceBlob),
+    ]);
     
     // Fill to the maximal captured resolution bounds
     const width = dims.width;
@@ -353,32 +396,83 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     }
 
     exportCtx.imageSmoothingEnabled = true;
-    exportCtx.imageSmoothingQuality = 'medium';
+    exportCtx.imageSmoothingQuality = 'high';
 
     const activeBackground = activeBackgroundRef.current;
+    const subjectCanvas = document.createElement('canvas');
+    subjectCanvas.width = width;
+    subjectCanvas.height = height;
+    const subjectCtx = subjectCanvas.getContext('2d');
+    if (!subjectCtx) {
+      closeDrawable(foregroundImage);
+      closeDrawable(sourceImage);
+      throw new Error('Could not create subject context.');
+    }
+
+    subjectCtx.imageSmoothingEnabled = true;
+    subjectCtx.imageSmoothingQuality = 'high';
+    subjectCtx.filter = 'blur(0.6px)';
+    subjectCtx.drawImage(foregroundImage, 0, 0, width, height);
+    subjectCtx.filter = 'none';
+    subjectCtx.globalCompositeOperation = 'source-in';
+    subjectCtx.drawImage(sourceImage, 0, 0, width, height);
+    subjectCtx.globalCompositeOperation = 'source-over';
 
     // Draw background first
+    exportCtx.save();
+    exportCtx.filter = CINEMATIC_BACKGROUND_FILTER;
     if (activeBackground) {
       exportCtx.drawImage(activeBackground, 0, 0, width, height);
     } else {
       exportCtx.fillStyle = '#00FF00';
       exportCtx.fillRect(0, 0, width, height);
     }
+    exportCtx.restore();
 
-    // Draw foreground (cutout person) on top
-    exportCtx.drawImage(foregroundImage, 0, 0, width, height);
-    if ('close' in foregroundImage && typeof foregroundImage.close === 'function') {
-      foregroundImage.close();
-    }
+    exportCtx.save();
+    exportCtx.globalAlpha = 0.18;
+    exportCtx.filter = 'blur(18px)';
+    exportCtx.drawImage(subjectCanvas, 0, Math.round(height * 0.012), width, height);
+    exportCtx.restore();
+
+    // Draw full-resolution subject with a subtle cinematic grade.
+    exportCtx.save();
+    exportCtx.filter = CINEMATIC_SUBJECT_FILTER;
+    exportCtx.drawImage(subjectCanvas, 0, 0, width, height);
+    exportCtx.restore();
+
+    const highlight = exportCtx.createRadialGradient(
+      width * 0.5,
+      height * 0.18,
+      0,
+      width * 0.5,
+      height * 0.18,
+      Math.max(width, height) * 0.8,
+    );
+    highlight.addColorStop(0, `rgba(255, 214, 168, ${CINEMATIC_HIGHLIGHT_ALPHA})`);
+    highlight.addColorStop(0.45, 'rgba(255, 183, 120, 0.04)');
+    highlight.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    exportCtx.fillStyle = highlight;
+    exportCtx.fillRect(0, 0, width, height);
+
+    const vignette = exportCtx.createRadialGradient(
+      width * 0.5,
+      height * 0.45,
+      Math.min(width, height) * 0.22,
+      width * 0.5,
+      height * 0.45,
+      Math.max(width, height) * 0.78,
+    );
+    vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vignette.addColorStop(0.72, 'rgba(8, 7, 12, 0.04)');
+    vignette.addColorStop(1, `rgba(6, 4, 10, ${CINEMATIC_VIGNETTE_ALPHA})`);
+    exportCtx.fillStyle = vignette;
+    exportCtx.fillRect(0, 0, width, height);
+
+    closeDrawable(foregroundImage);
+    closeDrawable(sourceImage);
     return exportCanvas;
   };
-
-  const getImglyModule = useCallback(async (): Promise<ImglyModule> => {
-    if (!imglyModuleRef.current) {
-      imglyModuleRef.current = await import('@imgly/background-removal') as any;
-    }
-    return imglyModuleRef.current!;
-  }, []);
 
   const getThresholdMask = useCallback((segmentationMask: CanvasImageSource, width: number, height: number): HTMLCanvasElement => {
     if (!rawMaskCanvasRef.current) rawMaskCanvasRef.current = document.createElement('canvas');
@@ -406,10 +500,20 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     const maskImageData = rawMaskCtx.getImageData(0, 0, width, height);
     const pixels = maskImageData.data;
     const thresholdByte = Math.max(0, Math.min(255, Math.round(MASK_THRESHOLD * 255)));
+    const softnessByte = Math.max(1, Math.round(MASK_SOFTNESS * 255));
+    const softStart = Math.max(0, thresholdByte - softnessByte);
+    const softEnd = Math.min(255, thresholdByte + softnessByte);
 
     for (let i = 0; i < pixels.length; i += 4) {
       const confidence = pixels[i];
-      const alpha = confidence >= thresholdByte ? 255 : 0;
+      let alpha = 0;
+      if (confidence <= softStart) {
+        alpha = 0;
+      } else if (confidence >= softEnd) {
+        alpha = 255;
+      } else {
+        alpha = Math.round(((confidence - softStart) / (softEnd - softStart)) * 255);
+      }
       pixels[i] = 255;
       pixels[i + 1] = 255;
       pixels[i + 2] = 255;
@@ -419,7 +523,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     thresholdMaskCtx.clearRect(0, 0, width, height);
     thresholdMaskCtx.putImageData(maskImageData, 0, 0);
     return thresholdMaskCanvas;
-  }, [MASK_THRESHOLD]);
+  }, [MASK_THRESHOLD, MASK_SOFTNESS]);
 
   // 2. The Drawing Loop
   const onResults = useCallback((results: Results): void => {
@@ -429,6 +533,8 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const { width, height } = canvas;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     ctx.save();
     ctx.clearRect(0, 0, width, height);
@@ -475,6 +581,8 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
   // 1. Initialize MediaPipe (Same as before)
   useEffect(() => {
+    if (!isCameraActive) return;
+
     const selfieSegmentation = new SelfieSegmentation({
       locateFile: (file: string) => `${MEDIAPIPE_BASE_URL}${file}?v=${MEDIAPIPE_ASSET_VERSION}`,
     });
@@ -489,12 +597,13 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     let camera: Camera | undefined;
     let cancelled = false;
     let isActive = true;
+    let rafId: number | null = null;
 
     const startCameraWhenReady = (): void => {
       if (cancelled) return;
       const video = webcamRef.current?.video;
       if (!video || video.readyState < 2) {
-        requestAnimationFrame(startCameraWhenReady);
+        rafId = requestAnimationFrame(startCameraWhenReady);
         return;
       }
 
@@ -522,57 +631,74 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     return () => {
       cancelled = true;
       isActive = false;
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
       if (camera) camera.stop();
       if (typeof selfieSegmentation.close === 'function') {
         selfieSegmentation.close();
       }
     };
-  }, [PROCESSING_HEIGHT, PROCESSING_WIDTH, onResults]);
+  }, [isCameraActive, PROCESSING_HEIGHT, PROCESSING_WIDTH, onResults]);
 
+  // Initialise Web Worker once — all ONNX inference runs off the main thread.
   useEffect(() => {
-    if (!ENABLE_IMGLY_PRELOAD) return;
+    const worker = new Worker(
+      new URL('../../../workers/bgRemoval.worker.ts', import.meta.url),
+      { type: 'module' },
+    );
 
-    let cancelled = false;
-    const preloadImgly = async (): Promise<void> => {
-      try {
-        const imglyModule = await getImglyModule();
-        const preload = imglyModule?.preload;
-        if (cancelled || typeof preload !== 'function') return;
-        await preload({
-          model: FINAL_REMOVAL_MODEL,
-          device: removalDeviceRef.current,
-        });
-      } catch (error) {
-        console.warn('IMG.LY preload failed. Will load on first capture.', error);
+    worker.onmessage = (e: MessageEvent) => {
+      const { id, type, arrayBuffer, mimeType, error } = e.data;
+      const cb = pendingCallbacksRef.current.get(id);
+      if (!cb) return;
+      pendingCallbacksRef.current.delete(id);
+      if (type === 'remove_ok') {
+        cb.resolve(new Blob([arrayBuffer], { type: mimeType }));
+      } else {
+        cb.reject(new Error(error ?? 'Background removal failed'));
       }
     };
 
-    const browserWindow = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-    let idleCallbackId: number | null = null;
-    let idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
-    if (typeof browserWindow.requestIdleCallback === 'function') {
-      idleCallbackId = browserWindow.requestIdleCallback(() => {
-        preloadPromiseRef.current = preloadImgly();
-      }, { timeout: 1500 });
-    } else {
-      idleTimeoutId = globalThis.setTimeout(() => {
-        preloadPromiseRef.current = preloadImgly();
-      }, 250);
-    }
+    worker.onerror = (e) => console.error('bgRemoval worker error:', e);
+    workerRef.current = worker;
 
-    return (): void => {
-      cancelled = true;
-      if (idleCallbackId !== null && typeof browserWindow.cancelIdleCallback === 'function') {
-        browserWindow.cancelIdleCallback(idleCallbackId);
-      }
-      if (idleTimeoutId !== null) {
-        globalThis.clearTimeout(idleTimeoutId);
-      }
+    // Warm-up: pre-load ONNX model in the worker while user sees live preview.
+    worker.postMessage({ id: 0, type: 'preload', model: 'medium' });
+
+    return () => {
+      worker.terminate();
+      workerRef.current = null;
+      pendingCallbacksRef.current.forEach((cb) => cb.reject(new Error('Worker terminated')));
+      pendingCallbacksRef.current.clear();
     };
-  }, [ENABLE_IMGLY_PRELOAD, FINAL_REMOVAL_MODEL, getImglyModule]);
+  }, []);
+
+  const removeBackgroundInWorker = useCallback(async (blob: Blob): Promise<Blob> => {
+    return new Promise(async (resolve, reject) => {
+      if (!workerRef.current) {
+        reject(new Error('Background removal worker unavailable.'));
+        return;
+      }
+      const id = ++pendingCallbackIdRef.current;
+      pendingCallbacksRef.current.set(id, { resolve, reject });
+      const arrayBuffer = await blob.arrayBuffer();
+      workerRef.current.postMessage(
+        {
+          id,
+          type: 'remove',
+          arrayBuffer,
+          mimeType: blob.type,
+          config: {
+            model: FINAL_REMOVAL_MODEL,
+            device: 'cpu',
+            output: { format: 'image/png', quality: 1, type: 'foreground' },
+          },
+        },
+        [arrayBuffer],
+      );
+    });
+  }, [FINAL_REMOVAL_MODEL]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -658,40 +784,20 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
     try {
       await waitForPaint();
 
-      // Wait for any in-flight preload to finish before starting inference
-      if (preloadPromiseRef.current) {
-        await preloadPromiseRef.current.catch(() => {});
-        preloadPromiseRef.current = null;
-      }
-
       const dims = getCaptureDimensions();
       setCaptureDimensions(dims);
 
-      const [rawFrameBlob, imglyModule] = await Promise.all([
-        captureRawVideoFrameBlob(dims),
-        getImglyModule(),
-      ]);
-      const removeBackground = imglyModule?.default || imglyModule?.removeBackground;
+      const rawFrameBlob = await captureRawVideoFrameBlob(dims);
+      const removalInputBlob = await resizeBlob(rawFrameBlob, getRemovalDimensions(dims));
 
-      if (typeof removeBackground !== 'function') {
-        throw new Error('IMG.LY removeBackground API is unavailable.');
-      }
+      // Pause camera feed while heavy background-removal inference runs in the Worker.
+      setIsCameraActive(false);
 
-      const config = {
-        model: FINAL_REMOVAL_MODEL,
-        device: removalDeviceRef.current,
-        output: {
-          format: 'image/png',
-          quality: 1,
-          type: 'foreground',
-        },
-      };
-
-      // Remove background using imgly library
-      const foregroundBlob = await removeBackground(rawFrameBlob, config);
+      // Run ONNX inference off the main thread — prevents "Page Unresponsive" dialog.
+      const foregroundBlob = await removeBackgroundInWorker(removalInputBlob);
 
       // Composite the cutout with the selected background
-      const finalCanvas = await composeForegroundWithBackground(foregroundBlob, dims);
+      const finalCanvas = await composeForegroundWithBackground(foregroundBlob, rawFrameBlob, dims);
       const finalBlob = await canvasToBlob(finalCanvas, FINAL_OUTPUT_MIME, FINAL_OUTPUT_QUALITY);
       
       // Show preview instead of downloading immediately
@@ -703,6 +809,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       setCaptureError('Masking failed. Please try again.');
     } finally {
       isCapturingRef.current = false;
+      setIsCameraActive(true);
       setIsProcessingCapture(false);
       if (processingStartRef.current !== null) {
         setProcessingTimeMs(Math.round(performance.now() - processingStartRef.current));
@@ -713,6 +820,7 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
 
 
   const handleRetakeCapture = (): void => {
+    setIsCameraActive(true);
     setShowCapturePreview(false);
     setCapturePreviewBlob(null);
     if (previewUrl) {
@@ -819,14 +927,16 @@ function AIImageScreen({ category = 'Wild Life', onBack = () => {}, onGenerate, 
       <div className="relative z-10 flex items-start justify-center px-[10px] mt-[10px]">
         <div style={{ width: previewDimensions.width, height: previewDimensions.height, position: 'relative', margin: '0 auto', flexShrink: 0 }}>
           <div className="relative rounded-[24px] overflow-hidden bg-black w-full h-full" style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }}>
-            {/* Hidden Webcam */}
-            <Webcam
-              ref={webcamRef}
-              style={{ display: 'none' }}
-              width={PROCESSING_WIDTH}
-              height={PROCESSING_HEIGHT}
-              videoConstraints={{ width: { ideal: PROCESSING_WIDTH }, height: { ideal: PROCESSING_HEIGHT }, facingMode: "user" }}
-            />
+            {/* Hidden Webcam – unmounts during processing to physically turn off camera */}
+            {isCameraActive && (
+              <Webcam
+                ref={webcamRef}
+                style={{ display: 'none' }}
+                width={PROCESSING_WIDTH}
+                height={PROCESSING_HEIGHT}
+                videoConstraints={{ width: { ideal: PROCESSING_WIDTH }, height: { ideal: PROCESSING_HEIGHT }, facingMode: "user" }}
+              />
+            )}
             {/* Main Display Canvas */}
             <canvas
               ref={canvasRef}

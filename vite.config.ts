@@ -12,6 +12,7 @@ export default defineConfig({
     https: true,
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
     },
      // Allows access from network devices
     // WASM files are automatically served with correct MIME type
@@ -50,6 +51,7 @@ export default defineConfig({
   preview: {
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
     },
   },
   optimizeDeps: {
